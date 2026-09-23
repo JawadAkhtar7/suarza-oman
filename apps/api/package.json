@@ -1,0 +1,43 @@
+{
+  "name": "@suarza-oman/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "demo": "tsx src/dev/demo-server.ts",
+    "demo:web": "SERVE_WEB=true tsx src/dev/demo-server.ts",
+    "db:status": "tsx src/maintenance/db-status.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "start:built": "SERVE_WEB=true tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src test"
+  },
+  "dependencies": {
+    "@suarza-oman/shared": "workspace:*",
+    "compression": "^1.8.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.24.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "@types/supertest": "^6.0.2",
+    "mongodb-memory-server": "^10.1.4",
+    "supertest": "^7.0.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

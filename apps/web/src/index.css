@@ -1,0 +1,15 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  /* The page behind the cards, so a short page still reads as a surface. */
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+}
+
+/* Figures are compared down a column throughout this product. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

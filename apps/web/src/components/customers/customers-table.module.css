@@ -1,0 +1,30 @@
+.row {
+  transition: background-color 100ms ease;
+}
+
+.row:hover {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+/* The header stays put while a long page scrolls under it: in a table people
+   read down a column, and a column they can no longer name is unreadable. */
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+  box-shadow: 0 1px 0 light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-4));
+}
+
+.headCell {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mantine-color-dimmed);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,240 @@
+/*
+ * The sidebar is a dark surface in both colour schemes.
+ *
+ * It is furniture, not content: keeping it constant gives the app a spine that
+ * does not move when someone switches theme, and it stops the navigation
+ * competing with the data — which is the thing people are actually reading.
+ */
+.navbar {
+  background: linear-gradient(180deg, #0b1524 0%, #0a1220 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 12px 12px;
+}
+
+/*
+ * The logo sits on a light plate rather than straight on the navy.
+ *
+ * Its "INTERNATIONAL" line is a dark green that all but disappears against a
+ * dark ground — the mark was drawn for print and for white pages. A plate keeps
+ * the artwork exactly as the brand intends it instead of recolouring it.
+ */
+.logoPlate {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.logo {
+  width: 100%;
+  max-width: 172px;
+  height: auto;
+  display: block;
+}
+
+/* The rail is too narrow for a wordmark, so it keeps a compact mark. */
+.mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #04120b;
+  background: linear-gradient(135deg, var(--mantine-color-brand-4), var(--mantine-color-brand-7));
+  box-shadow: 0 6px 16px rgba(18, 169, 104, 0.35);
+  flex-shrink: 0;
+}
+
+.search {
+  margin: 0 12px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 24px);
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.search:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.kbd {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.groupLabel {
+  padding: 14px 16px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* Active state carries three cues at once — a tinted ground, a left bar and a
+   brighter icon — so it survives being glanced at rather than looked at. */
+.linkActive,
+.linkActive:hover {
+  background: linear-gradient(90deg, rgba(18, 169, 104, 0.22), rgba(18, 169, 104, 0.06));
+  color: #fff;
+}
+
+.linkActive::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: var(--mantine-color-brand-4);
+}
+
+.linkIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.linkActive .linkIcon {
+  opacity: 1;
+  color: var(--mantine-color-brand-4);
+}
+
+.linkLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A live count turns a menu item into a fact about the business. */
+.count {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.soon {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.42);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
+.linkPlanned {
+  cursor: default;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.linkPlanned:hover {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.footer {
+  margin-top: auto;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+
+.user:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.userName {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.userRole {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* Collapsed rail: the same component, 72px wide, labels dropped for tooltips. */
+.collapsed .link {
+  justify-content: center;
+  padding: 10px;
+}
+
+.collapsed .brand {
+  justify-content: center;
+}
