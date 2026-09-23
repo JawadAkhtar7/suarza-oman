@@ -1,0 +1,22 @@
+# Render blueprint for the API. Point Render at this repo and it reads this.
+
+services:
+  - type: web
+    name: suarza-oman-api
+    runtime: node
+    plan: free
+    # Closest free region to Oman; Singapore is the alternative.
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @suarza-oman/shared build && pnpm --filter @suarza-oman/api build
+    startCommand: node apps/api/dist/index.js
+    # Render restarts the service if this stops answering.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Set in the Render dashboard, never in this file — it holds the password.
+      - key: MONGODB_URI
+        sync: false
+      # Netlify serves the web app; this process is the API only.
+      - key: SERVE_WEB
+        value: "false"

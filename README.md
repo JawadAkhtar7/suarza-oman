@@ -45,6 +45,12 @@ pnpm typecheck && pnpm lint && pnpm test
 
 API tests run against an in-memory MongoDB, so they never touch Atlas.
 
+## Deploying
+
+Netlify serves the web app, Render runs the API, and Netlify forwards `/api/*`
+to it — see [docs/deployment.md](docs/deployment.md). Both configs are in the
+repo (`netlify.toml`, `render.yaml`).
+
 ## Conventions worth knowing
 
 - **Money is stored in baisa**, the integer minor unit — 1 OMR = 1000 baisa.

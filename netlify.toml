@@ -1,0 +1,30 @@
+# Netlify serves the built web app. The API lives on Render.
+
+[build]
+  # The web app imports @suarza-oman/shared, so that has to be built first.
+  command = "pnpm --filter @suarza-oman/shared build && pnpm --filter @suarza-oman/web build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  # Vite 8 needs Node 20.19+; 22 is the safe default on Netlify.
+  NODE_VERSION = "22"
+
+# Everything under /api is forwarded to the API service, so the browser only
+# ever talks to one origin. That keeps CORS out of the picture entirely — and
+# leaves the door open for cookie-based login later, which cross-origin would
+# make painful.
+#
+# REPLACE the host below with your own Render URL once the API is deployed.
+[[redirects]]
+  from = "/api/*"
+  to = "https://suarza-oman-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Client-side routing: /ledger/<id> is a page in the app, not a file on disk,
+# so every other path returns index.html and the router takes over. Without
+# this, refreshing on any page but the dashboard is a 404.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
