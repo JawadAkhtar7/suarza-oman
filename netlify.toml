@@ -13,11 +13,9 @@
 # ever talks to one origin. That keeps CORS out of the picture entirely — and
 # leaves the door open for cookie-based login later, which cross-origin would
 # make painful.
-#
-# REPLACE the host below with your own Render URL once the API is deployed.
 [[redirects]]
   from = "/api/*"
-  to = "https://suarza-oman-api.onrender.com/api/:splat"
+  to = "https://suarza-oman.onrender.com/api/:splat"
   status = 200
   force = true
 
