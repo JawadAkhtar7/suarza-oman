@@ -25,7 +25,16 @@ export type LedgerDirection = z.infer<typeof ledgerDirectionSchema>;
  * What the entry is, in the language the office uses. The direction is implied
  * by all of these except an adjustment, which can go either way.
  */
-export const LEDGER_KINDS = ['OPENING', 'CHARGE', 'PAYMENT', 'ADJUSTMENT'] as const;
+export const LEDGER_KINDS = [
+  'OPENING',
+  'CHARGE',
+  'PAYMENT',
+  /** A supplier's bill: we owe them. */
+  'BILL',
+  /** Money paid out to a supplier. */
+  'PAYMENT_MADE',
+  'ADJUSTMENT',
+] as const;
 export const ledgerKindSchema = z.enum(LEDGER_KINDS);
 export type LedgerKind = z.infer<typeof ledgerKindSchema>;
 
@@ -33,6 +42,8 @@ export const LEDGER_KIND_LABELS: Record<LedgerKind, string> = {
   OPENING: 'Opening balance',
   CHARGE: 'Charge',
   PAYMENT: 'Payment',
+  BILL: 'Supplier bill',
+  PAYMENT_MADE: 'Paid out',
   ADJUSTMENT: 'Adjustment',
 };
 
@@ -41,6 +52,11 @@ export const KIND_DIRECTION: Record<LedgerKind, LedgerDirection | null> = {
   OPENING: null,
   CHARGE: 'DEBIT',
   PAYMENT: 'CREDIT',
+  /* A bill puts the account in credit: from the customer ledger's point of
+     view, a negative balance is money we hold — and for a supplier that is
+     money we owe them. Same arithmetic, read from the other side. */
+  BILL: 'CREDIT',
+  PAYMENT_MADE: 'DEBIT',
   ADJUSTMENT: null,
 };
 

@@ -33,7 +33,7 @@ export interface NavItem {
   /** Shown as a muted "Soon" chip; the link is inert until it is built. */
   planned?: boolean;
   /** Filled in by the shell for items that can show a live figure. */
-  countKey?: 'customers' | 'vendors';
+  countKey?: 'customers' | 'vendors' | 'products' | 'employees';
 }
 
 export interface NavGroup {
@@ -46,23 +46,23 @@ export const NAV: NavGroup[] = [
     label: 'Overview',
     items: [
       { label: 'Dashboard', to: '/', icon: IconLayoutDashboard },
-      { label: 'Reports', to: '/reports', icon: IconChartHistogram, planned: true },
+      { label: 'Reports', to: '/reports', icon: IconChartHistogram },
     ],
   },
   {
     label: 'Master data',
     items: [
       { label: 'Customers', to: '/customers', icon: IconAddressBook, countKey: 'customers' },
-      { label: 'Products', to: '/products', icon: IconBox, planned: true },
-      { label: 'Employees', to: '/employees', icon: IconUsers, planned: true },
+      { label: 'Products', to: '/products', icon: IconBox, countKey: 'products' },
+      { label: 'Employees', to: '/employees', icon: IconUsers, countKey: 'employees' },
       { label: 'Vendors', to: '/vendors', icon: IconBuildingWarehouse, countKey: 'vendors' },
     ],
   },
   {
     label: 'Operations',
     items: [
-      { label: 'Sales', to: '/sales', icon: IconShoppingCart, planned: true },
-      { label: 'Purchases', to: '/purchases', icon: IconFileInvoice, planned: true },
+      { label: 'Sales', to: '/sales', icon: IconShoppingCart },
+      { label: 'Purchases', to: '/purchases', icon: IconFileInvoice },
     ],
   },
   {

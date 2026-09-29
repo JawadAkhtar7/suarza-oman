@@ -1,4 +1,13 @@
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
+
+/*
+ * Test files run in parallel, and under that load a portalled Mantine menu or
+ * modal can take longer than the library's default one second to appear. The
+ * failure then reads as "menu item not found", which looks like a product bug
+ * and is not one. Five seconds costs nothing when things are working.
+ */
+configure({ asyncUtilTimeout: 3000 });
 
 /*
  * Tests run as a desktop browser: `min-width` queries match, so the components
@@ -57,8 +66,12 @@ afterEach(() => {
      by one test re-opens itself the moment the next test mounts a provider. */
   modals.closeAll();
 
+  /* Emptied, not removed: Mantine creates that node once and keeps a reference
+     to it for the life of the module. Deleting it leaves later tests rendering
+     their menus and modals into a node that is no longer in the document, and
+     the failure looks like a missing menu item rather than a broken harness. */
   for (const node of document.querySelectorAll('[data-mantine-shared-portal-node]')) {
-    node.remove();
+    node.replaceChildren();
   }
   document.body.removeAttribute('aria-hidden');
   document.body.style.removeProperty('overflow');

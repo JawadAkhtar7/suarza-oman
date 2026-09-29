@@ -14,6 +14,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { customersRouter } from './routes/customers.js';
 import { ledgerRouter } from './routes/ledger.js';
+import { productsRouter } from './routes/products.js';
+import { employeesRouter } from './routes/employees.js';
+import { documentsRouter } from './routes/documents.js';
+import { reportsRouter } from './routes/reports.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { waitForDatabase } from './lib/db-ready.js';
 
@@ -84,6 +88,10 @@ export function createApp({ corsOrigins = [], serveWeb = false }: AppOptions = {
 
   app.use('/api/customers', customersRouter);
   app.use('/api/ledger', ledgerRouter);
+  app.use('/api/products', productsRouter);
+  app.use('/api/employees', employeesRouter);
+  app.use('/api/documents', documentsRouter);
+  app.use('/api/reports', reportsRouter);
 
   if (serveWeb) {
     const dist = webDistPath();

@@ -47,7 +47,7 @@ interface FormValues {
   entry_date: Date;
 }
 
-const KIND_HELP: Record<LedgerKind, string> = {
+const KIND_HELP: Partial<Record<LedgerKind, string>> = {
   CHARGE: 'Adds to what this customer owes you — an invoice, a delivery, a service.',
   PAYMENT: 'Reduces what they owe — cash, transfer or cheque received.',
   ADJUSTMENT: 'A correction, a discount or a write-off. Choose which way it moves.',
@@ -178,7 +178,7 @@ export function EntryModal({
           />
 
           <Text fz="xs" c="dimmed" mt={-8}>
-            {KIND_HELP[kind]}
+            {KIND_HELP[kind] ?? 'Posted from a sale or a purchase.'}
           </Text>
 
           {needsDirection && (

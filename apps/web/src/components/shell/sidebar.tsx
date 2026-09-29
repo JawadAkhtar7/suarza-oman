@@ -35,7 +35,7 @@ import classes from './sidebar.module.css';
 export interface SidebarProps {
   collapsed: boolean;
   /** Live figures for the badges; absent while they load. */
-  counts: Partial<Record<'customers' | 'vendors', number>>;
+  counts: Partial<Record<'customers' | 'vendors' | 'products' | 'employees', number>>;
   /** Closes the mobile drawer after a jump; absent on desktop. */
   onNavigate?: () => void;
 }

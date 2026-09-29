@@ -35,6 +35,18 @@ export function AppLayout() {
     select: (page) => page.total,
   });
 
+  const productCount = useQuery({
+    queryKey: ['products', 'count'],
+    queryFn: () => api.get<{ total: number }>('/api/products?page_size=1'),
+    select: (page) => page.total,
+  });
+
+  const employeeCount = useQuery({
+    queryKey: ['employees', 'count'],
+    queryFn: () => api.get<{ total: number }>('/api/employees?page_size=1'),
+    select: (page) => page.total,
+  });
+
   const vendorCount = useQuery({
     queryKey: ['customers', 'count', 'vendors'],
     queryFn: () => api.get<CustomerPage>('/api/customers?page_size=1&vendor=true'),
@@ -59,7 +71,12 @@ export function AppLayout() {
       <AppShell.Navbar withBorder={false} p={0}>
         <Sidebar
           collapsed={collapsed && !!isDesktop}
-          counts={{ customers: customerCount.data, vendors: vendorCount.data }}
+          counts={{
+            customers: customerCount.data,
+            vendors: vendorCount.data,
+            products: productCount.data,
+            employees: employeeCount.data,
+          }}
           onNavigate={closeMobile}
         />
       </AppShell.Navbar>

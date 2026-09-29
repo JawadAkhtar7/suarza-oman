@@ -134,6 +134,8 @@ async function main(): Promise<void> {
     console.log('[demo] in-memory database; everything is lost when this stops');
   });
 
+  await seedTrading(port);
+
   const stop = async () => {
     await mongoose.disconnect();
     await mongod.stop();
@@ -141,6 +143,152 @@ async function main(): Promise<void> {
   };
   process.on('SIGINT', () => void stop());
   process.on('SIGTERM', () => void stop());
+}
+
+/**
+ * Products, staff, sales and purchases — seeded through the running API rather
+ * than written straight into the collections.
+ *
+ * That way the demo exercises the real code path: documents get their numbers
+ * from the counter, stock moves, and the ledger is posted exactly as it would
+ * be for a real sale. Data faked at the database level would look right and
+ * behave differently.
+ */
+async function seedTrading(port: number): Promise<void> {
+  const base = `http://127.0.0.1:${port}/api`;
+  const post = async (path: string, body: unknown) => {
+    const response = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+    return response.json() as Promise<Record<string, { id: string }>>;
+  };
+
+  const PRODUCTS = [
+    ['Cement 50kg bag', 'CEM50', 'Building materials', 'BAG', 2_100, 2_600, 400],
+    ['Steel bar 12mm', 'STL12', 'Building materials', 'PIECE', 3_400, 4_200, 260],
+    ['Sand (per tonne)', 'SND01', 'Building materials', 'TONNE', 4_000, 5_500, 80],
+    ['Aggregate 20mm', 'AGG20', 'Building materials', 'TONNE', 3_800, 5_200, 60],
+    ['Paint — white 20L', 'PNT20', 'Finishing', 'BOX', 12_500, 16_000, 45],
+    ['Floor tile 60x60', 'TIL60', 'Finishing', 'BOX', 5_600, 7_400, 120],
+    ['Rice 25kg', 'RIC25', 'Foodstuff', 'BAG', 7_200, 8_900, 90],
+    ['Sugar 50kg', 'SUG50', 'Foodstuff', 'BAG', 9_100, 11_000, 40],
+    ['Bottled water 24x500ml', 'WTR24', 'Foodstuff', 'CARTON', 800, 1_200, 300],
+    ['Delivery within Muscat', 'DEL01', 'Services', 'PIECE', 0, 5_000, 0],
+  ] as const;
+
+  const products: { id: string; sale: number; unit: string; name: string }[] = [];
+  for (const [name, code, category, unit, cost, sale, stock] of PRODUCTS) {
+    const created = await post('/products', {
+      name,
+      code,
+      category,
+      unit,
+      cost_price_baisa: cost,
+      sale_price_baisa: sale,
+      track_stock: code !== 'DEL01',
+      reorder_level_milli: stock > 0 ? Math.round(stock * 1000 * 0.15) : 0,
+      opening_stock_milli: stock * 1000,
+    });
+    products.push({ id: created['product']!.id, sale, unit, name });
+  }
+
+  const STAFF = [
+    ['Salim Al Hinai', 'E001', 'Driver', 'Logistics', 320_000, '2023-02-01'],
+    ['Maryam Al Balushi', 'E002', 'Accountant', 'Finance', 650_000, '2022-08-15'],
+    ['Yousuf Al Amri', 'E003', 'Storekeeper', 'Warehouse', 380_000, '2024-01-10'],
+    ['Fatma Al Harthy', 'E004', 'Sales executive', 'Sales', 550_000, '2023-11-05'],
+    ['Khalid Al Lawati', 'E005', 'Driver', 'Logistics', 320_000, '2025-03-20'],
+    ['Aisha Al Kindi', 'E006', 'Office administrator', 'Admin', 450_000, '2024-06-01'],
+    ['Rashid Al Saadi', 'E007', 'Warehouse hand', 'Warehouse', 12_000, '2025-09-12'],
+  ] as const;
+
+  for (const [name, code, designation, department, salary, joined] of STAFF) {
+    await post('/employees', {
+      name,
+      code,
+      designation,
+      department,
+      phone: `+968 9${Math.floor(1000000 + Math.random() * 8999999)}`,
+      salary_baisa: salary,
+      pay_frequency: code === 'E007' ? 'DAILY' : 'MONTHLY',
+      joined_on: joined,
+      nationality: 'Omani',
+    });
+  }
+
+  /* Customers are already seeded above; the first few double as suppliers. */
+  const customers = (await (await fetch(`${base}/customers?page_size=100`)).json()) as {
+    rows?: { id: string; name: string }[];
+  };
+  const parties = customers.rows ?? [];
+  if (parties.length === 0) return;
+
+  const suppliers = parties.slice(0, 3);
+  for (const supplier of suppliers) {
+    await fetch(`${base}/customers/${supplier.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ is_vendor: true }),
+    });
+  }
+
+  const dayAgo = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return date.toISOString();
+  };
+  const pick = <T,>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)]!;
+
+  /* Purchases first, so there is stock to sell. */
+  for (let i = 0; i < 12; i++) {
+    const supplier = pick(suppliers);
+    const lineCount = 1 + Math.floor(Math.random() * 2);
+    await post('/documents', {
+      kind: 'PURCHASE',
+      party_id: supplier.id,
+      document_date: dayAgo(55 - i * 4),
+      reference: `SI-${4000 + i}`,
+      settlement: i % 3 === 0 ? 'PAID' : 'ON_ACCOUNT',
+      lines: Array.from({ length: lineCount }, () => {
+        const product = pick(products.filter((p) => p.name !== 'Delivery within Muscat'));
+        return {
+          product_id: product.id,
+          description: product.name,
+          unit: product.unit,
+          quantity_milli: (10 + Math.floor(Math.random() * 40)) * 1000,
+          unit_price_baisa: Math.round(product.sale * 0.78),
+          vat_rate_percent: 5,
+        };
+      }),
+    });
+  }
+
+  for (let i = 0; i < 34; i++) {
+    const customer = pick(parties);
+    const lineCount = 1 + Math.floor(Math.random() * 3);
+    await post('/documents', {
+      kind: 'SALE',
+      party_id: customer.id,
+      document_date: dayAgo(Math.floor(Math.random() * 45)),
+      settlement: i % 3 === 0 ? 'ON_ACCOUNT' : 'PAID',
+      lines: Array.from({ length: lineCount }, () => {
+        const product = pick(products);
+        return {
+          product_id: product.id,
+          description: product.name,
+          unit: product.unit,
+          quantity_milli: (1 + Math.floor(Math.random() * 12)) * 1000,
+          unit_price_baisa: product.sale,
+          vat_rate_percent: product.name === 'Delivery within Muscat' ? 5 : 5,
+        };
+      }),
+    });
+  }
+
+  console.log(`[demo] seeded ${PRODUCTS.length} products, ${STAFF.length} staff, 12 purchases, 34 sales`);
 }
 
 main().catch((error: unknown) => {

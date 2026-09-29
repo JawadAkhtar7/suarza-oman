@@ -5,6 +5,10 @@ import { loadConfig } from './config.js';
 import { connect, describeConnection, disconnect } from './db/connection.js';
 import { syncCustomerIndexes } from './models/customer.model.js';
 import { syncLedgerIndexes } from './models/ledger-entry.model.js';
+import { syncProductIndexes } from './models/product.model.js';
+import { syncStockIndexes } from './models/stock-movement.model.js';
+import { syncEmployeeIndexes } from './models/employee.model.js';
+import { syncDocumentIndexes } from './models/trade-document.model.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -32,6 +36,10 @@ async function main(): Promise<void> {
   // applied on deploy.
   await syncCustomerIndexes();
   await syncLedgerIndexes();
+  await syncProductIndexes();
+  await syncStockIndexes();
+  await syncEmployeeIndexes();
+  await syncDocumentIndexes();
 
   /* Finish in-flight requests and close the pool, so a restart under a process
      manager does not drop a write that was already accepted. */
