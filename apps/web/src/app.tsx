@@ -13,6 +13,8 @@ export function App() {
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="customers" element={<CustomersPage />} />
+        {/* The same screen, filtered — see CustomersPageProps. */}
+        <Route path="vendors" element={<CustomersPage vendorsOnly />} />
         <Route path="ledger" element={<LedgerPage />} />
         <Route path="ledger/:customerId" element={<LedgerCustomerPage />} />
         {/* Anything not built yet lands on the dashboard rather than a blank

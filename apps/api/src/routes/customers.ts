@@ -9,7 +9,7 @@
 import { Router } from 'express';
 import { isValidObjectId } from 'mongoose';
 import {
-  createCustomerSchema,
+  createCustomerWithOpeningSchema,
   customerQuerySchema,
   updateCustomerSchema,
   type CustomerPage,
@@ -52,6 +52,9 @@ customersRouter.get(
     const filter = {
       ...searchFilter(query.q),
       ...(query.status === 'ALL' ? {} : { status: query.status }),
+      // Only ever narrows: the customers page leaves `vendor` unset and sees
+      // everyone, vendors included.
+      ...(query.vendor ? { is_vendor: true } : {}),
     };
 
     // Counted alongside the page, not derived from it: the table shows "1–25 of
@@ -87,8 +90,31 @@ customersRouter.get(
 customersRouter.post(
   '/',
   handle(async (req, res) => {
-    const input = createCustomerSchema.parse(req.body);
-    const doc = await CustomerModel.create(input);
+    const { opening_balance_baisa, opening_balance_direction, ...customer } =
+      createCustomerWithOpeningSchema.parse(req.body);
+
+    const doc = await CustomerModel.create(customer);
+
+    /*
+     * An opening balance is a ledger entry, not a field.
+     *
+     * Everything that reads a balance — the ledger list, the account page, the
+     * statement — sums the entries. A number kept on the customer instead would
+     * be a second answer to the same question, and the two would eventually
+     * disagree.
+     */
+    if (opening_balance_baisa > 0) {
+      await LedgerEntryModel.create({
+        customer_id: doc._id,
+        kind: 'OPENING',
+        direction: opening_balance_direction,
+        amount_baisa: opening_balance_baisa,
+        description: 'Opening balance',
+        reference: '',
+        entry_date: new Date(),
+      });
+    }
+
     res.status(201).json({ customer: toCustomer(doc.toObject()) });
   }),
 );

@@ -15,6 +15,7 @@ import helmet from 'helmet';
 import { customersRouter } from './routes/customers.js';
 import { ledgerRouter } from './routes/ledger.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
+import { waitForDatabase } from './lib/db-ready.js';
 
 export interface AppOptions {
   corsOrigins?: string[];
@@ -73,9 +74,13 @@ export function createApp({ corsOrigins = [], serveWeb = false }: AppOptions = {
 
   app.use(express.json({ limit: '1mb' }));
 
+  /* Answers even while the database is still connecting — that is the point
+     of a health check. */
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
   });
+
+  app.use(waitForDatabase());
 
   app.use('/api/customers', customersRouter);
   app.use('/api/ledger', ledgerRouter);

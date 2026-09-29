@@ -163,3 +163,127 @@ describe('the API envelope', () => {
     expect(response.body.ok).toBe(true);
   });
 });
+
+describe('the new customer fields', () => {
+  it('defaults pay mode to cash and the vendor flag to off', async () => {
+    const response = await request(app).post('/api/customers').send(customerInput());
+    expect(response.body.customer).toMatchObject({
+      pay_mode: 'CASH',
+      is_vendor: false,
+      previous_year_balance_baisa: 0,
+    });
+  });
+
+  it("keeps last year's figure as a reference without touching the ledger", async () => {
+    const created = await request(app)
+      .post('/api/customers')
+      .send(
+        customerInput({
+          previous_year_balance_baisa: 250_000,
+          previous_year_balance_direction: 'CREDIT',
+        }),
+      );
+
+    expect(created.body.customer).toMatchObject({
+      previous_year_balance_baisa: 250_000,
+      previous_year_balance_direction: 'CREDIT',
+    });
+
+    // The ledger is untouched: last year's closing and this year's opening are
+    // the same money, and posting both would count it twice.
+    const account = await request(app).get(`/api/ledger/customers/${created.body.customer.id}`);
+    expect(account.body.account.balance_baisa).toBe(0);
+    expect(account.body.account.entry_count).toBe(0);
+  });
+
+  it('turns an opening balance into a ledger entry', async () => {
+    const created = await request(app)
+      .post('/api/customers')
+      .send(customerInput({ opening_balance_baisa: 150_000, opening_balance_direction: 'DEBIT' }));
+
+    const id = created.body.customer.id;
+    const account = await request(app).get(`/api/ledger/customers/${id}`);
+    expect(account.body.account.balance_baisa).toBe(150_000);
+
+    const entries = await request(app).get(`/api/ledger/customers/${id}/entries`);
+    expect(entries.body.rows[0]).toMatchObject({
+      kind: 'OPENING',
+      direction: 'DEBIT',
+      amount_baisa: 150_000,
+      description: 'Opening balance',
+    });
+  });
+
+  it('opens on the credit side when the customer paid ahead', async () => {
+    const created = await request(app)
+      .post('/api/customers')
+      .send(customerInput({ opening_balance_baisa: 75_000, opening_balance_direction: 'CREDIT' }));
+
+    const account = await request(app).get(`/api/ledger/customers/${created.body.customer.id}`);
+    expect(account.body.account.balance_baisa).toBe(-75_000);
+  });
+
+  it('writes no entry when the opening balance is zero', async () => {
+    const created = await request(app).post('/api/customers').send(customerInput());
+    const entries = await request(app).get(`/api/ledger/customers/${created.body.customer.id}/entries`);
+    expect(entries.body.total).toBe(0);
+  });
+});
+
+describe('vendors', () => {
+  it('lists only the customers marked as vendors', async () => {
+    await request(app).post('/api/customers').send(customerInput({ name: 'Plain Customer' }));
+    await request(app)
+      .post('/api/customers')
+      .send(customerInput({ name: 'Also A Vendor', email: '', is_vendor: true }));
+
+    const vendors = await request(app).get('/api/customers?vendor=true');
+    expect(vendors.body.rows.map((r: { name: string }) => r.name)).toEqual(['Also A Vendor']);
+
+    // The customers page sets no flag and still sees everyone.
+    const all = await request(app).get('/api/customers');
+    expect(all.body.total).toBe(2);
+  });
+
+  it('can be turned on and off after the fact', async () => {
+    const created = await request(app).post('/api/customers').send(customerInput());
+    await request(app).patch(`/api/customers/${created.body.customer.id}`).send({ is_vendor: true });
+    expect((await request(app).get('/api/customers?vendor=true')).body.total).toBe(1);
+
+    await request(app).patch(`/api/customers/${created.body.customer.id}`).send({ is_vendor: false });
+    expect((await request(app).get('/api/customers?vendor=true')).body.total).toBe(0);
+  });
+});
+
+describe('starting up before the database is ready', () => {
+  it('answers the health check straight away', async () => {
+    // Registered before the wait, so a platform health check never blocks on
+    // a database that is still connecting.
+    const response = await request(app).get('/api/health');
+    expect(response.status).toBe(200);
+  });
+
+  it('answers a data request with a 503 rather than hanging forever', async () => {
+    const express = (await import('express')).default;
+    const { waitForDatabase } = await import('../src/lib/db-ready.js');
+
+    // A stub connection that never connects, and a short timeout standing in
+    // for the real 45 seconds. Nothing global is touched, so the suite's own
+    // database is unaffected.
+    const stuck = { readyState: 0, once: () => undefined, off: () => undefined };
+    const probe = express();
+    probe.use(waitForDatabase(50, stuck));
+    probe.get('/anything', (_req, res) => {
+      res.json({ ok: true });
+    });
+
+    const response = await request(probe).get('/anything');
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe('DATABASE_UNAVAILABLE');
+  });
+
+  it('lets requests through once the connection is up', async () => {
+    // The suite's own connection is live, so this is the normal path.
+    expect((await request(app).get('/api/customers')).status).toBe(200);
+  });
+});

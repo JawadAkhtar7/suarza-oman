@@ -9,7 +9,7 @@
 
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import type {
-  CreateCustomerInput,
+  CreateCustomerWithOpeningInput,
   Customer,
   CustomerPage,
   UpdateCustomerInput,
@@ -21,6 +21,8 @@ export interface CustomerListParams {
   status: 'ALL' | 'ACTIVE' | 'INACTIVE';
   page: number;
   page_size: number;
+  /** Set only by the vendors page; the customers page shows everyone. */
+  vendor?: boolean;
 }
 
 const keys = {
@@ -31,7 +33,14 @@ const keys = {
 export function useCustomers(params: CustomerListParams) {
   return useQuery({
     queryKey: keys.list(params),
-    queryFn: () => api.get<CustomerPage>(`/api/customers${queryString({ ...params })}`),
+    queryFn: () => {
+      /* `vendor` is a boolean in the params but a string on the wire; pulled
+         out here so the query string helper only ever sees text and numbers. */
+      const { vendor, ...rest } = params;
+      return api.get<CustomerPage>(
+        `/api/customers${queryString({ ...rest, ...(vendor ? { vendor: 'true' } : {}) })}`,
+      );
+    },
     // Typing in the search box would otherwise blank the table on every
     // keystroke; the previous page stays put until the new one arrives.
     placeholderData: keepPreviousData,
@@ -41,7 +50,7 @@ export function useCustomers(params: CustomerListParams) {
 export function useCreateCustomer() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateCustomerInput) =>
+    mutationFn: (input: CreateCustomerWithOpeningInput) =>
       api.post<{ customer: Customer }>('/api/customers', input),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.all }),
   });

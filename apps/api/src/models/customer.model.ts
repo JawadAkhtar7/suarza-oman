@@ -18,6 +18,12 @@ const customerSchema = new Schema(
     vat_number: { type: String, default: '', trim: true, maxlength: 32 },
     notes: { type: String, default: '', trim: true, maxlength: 1000 },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true },
+    pay_mode: { type: String, enum: ['CASH', 'CREDIT', 'MULTI', 'VISA'], default: 'CASH' },
+    /* Indexed: the vendors page filters on it every time it loads. */
+    is_vendor: { type: Boolean, default: false, index: true },
+    /* Reference only — the ledger, not this, decides what anyone owes. */
+    previous_year_balance_baisa: { type: Number, default: 0, min: 0 },
+    previous_year_balance_direction: { type: String, enum: ['DEBIT', 'CREDIT'], default: 'DEBIT' },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -52,6 +58,11 @@ export function toCustomer(doc: CustomerDoc & { _id: unknown; created_at?: Date;
     vat_number: doc.vat_number ?? '',
     notes: doc.notes ?? '',
     status: doc.status as Customer['status'],
+    pay_mode: (doc.pay_mode ?? 'CASH') as Customer['pay_mode'],
+    is_vendor: Boolean(doc.is_vendor),
+    previous_year_balance_baisa: doc.previous_year_balance_baisa ?? 0,
+    previous_year_balance_direction: (doc.previous_year_balance_direction ??
+      'DEBIT') as Customer['previous_year_balance_direction'],
     created_at: (doc.created_at ?? new Date()).toISOString(),
     updated_at: (doc.updated_at ?? new Date()).toISOString(),
   };

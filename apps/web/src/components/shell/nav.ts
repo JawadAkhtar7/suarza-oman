@@ -33,7 +33,7 @@ export interface NavItem {
   /** Shown as a muted "Soon" chip; the link is inert until it is built. */
   planned?: boolean;
   /** Filled in by the shell for items that can show a live figure. */
-  countKey?: 'customers';
+  countKey?: 'customers' | 'vendors';
 }
 
 export interface NavGroup {
@@ -55,7 +55,7 @@ export const NAV: NavGroup[] = [
       { label: 'Customers', to: '/customers', icon: IconAddressBook, countKey: 'customers' },
       { label: 'Products', to: '/products', icon: IconBox, planned: true },
       { label: 'Employees', to: '/employees', icon: IconUsers, planned: true },
-      { label: 'Suppliers', to: '/suppliers', icon: IconBuildingWarehouse, planned: true },
+      { label: 'Vendors', to: '/vendors', icon: IconBuildingWarehouse, countKey: 'vendors' },
     ],
   },
   {

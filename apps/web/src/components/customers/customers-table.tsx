@@ -35,7 +35,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
-import { formatDate, initials, type Customer } from '@suarza-oman/shared';
+import { PAY_MODE_LABELS, formatDate, initials, type Customer } from '@suarza-oman/shared';
 import classes from './customers-table.module.css';
 
 export interface CustomersTableProps {
@@ -67,9 +67,16 @@ function Identity({ customer }: { customer: Customer }) {
         <Text fz="sm" fw={600} truncate>
           {customer.name}
         </Text>
-        <Text fz="xs" c="dimmed" truncate>
-          {customer.company || '—'}
-        </Text>
+        <Group gap={6} wrap="nowrap">
+          <Text fz="xs" c="dimmed" truncate>
+            {customer.company || '—'}
+          </Text>
+          {customer.is_vendor && (
+            <Badge size="xs" variant="outline" color="gray">
+              Vendor
+            </Badge>
+          )}
+        </Group>
       </div>
     </Group>
   );
@@ -173,6 +180,7 @@ export function CustomersTable({ rows, isLoading, onEdit, onDelete }: CustomersT
             <Table.Tr>
               <Table.Th className={classes.headCell}>Customer</Table.Th>
               <Table.Th className={classes.headCell}>Contact</Table.Th>
+              <Table.Th className={classes.headCell}>Pay mode</Table.Th>
               <Table.Th className={classes.headCell}>VAT number</Table.Th>
               <Table.Th className={classes.headCell}>Status</Table.Th>
               <Table.Th className={classes.headCell}>Added</Table.Th>
@@ -192,6 +200,9 @@ export function CustomersTable({ rows, isLoading, onEdit, onDelete }: CustomersT
                   <Text fz="xs" c="dimmed" truncate maw={220}>
                     {customer.email || '—'}
                   </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Text fz="sm">{PAY_MODE_LABELS[customer.pay_mode]}</Text>
                 </Table.Td>
                 <Table.Td>
                   <Text fz="sm" c={customer.vat_number ? undefined : 'dimmed'} className={classes.numeric}>

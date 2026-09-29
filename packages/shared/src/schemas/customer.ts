@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { ledgerDirectionSchema } from './ledger.js';
 
 /** Kept out of the enum literal union so the UI can iterate over it. */
 export const CUSTOMER_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
@@ -29,6 +30,24 @@ const phone = z
 /** Blank means "not given" everywhere; nothing distinguishes '' from absent. */
 const optionalText = (max: number) => z.string().trim().max(max).default('');
 
+/** How this customer normally settles. Reference on the record, not a rule. */
+export const PAY_MODES = ['CASH', 'CREDIT', 'MULTI', 'VISA'] as const;
+export const payModeSchema = z.enum(PAY_MODES);
+export type PayMode = z.infer<typeof payModeSchema>;
+
+export const PAY_MODE_LABELS: Record<PayMode, string> = {
+  CASH: 'Cash',
+  CREDIT: 'Credit',
+  MULTI: 'MultiPayMode',
+  VISA: 'Visa card',
+};
+
+/**
+ * A balance carried on the customer record, in whole baisa with the side it
+ * falls on. Zero means "none given", and then the direction means nothing.
+ */
+const carriedAmount = z.number().int().min(0).max(9_000_000_000).default(0);
+
 export const createCustomerSchema = z.object({
   name: z.string().trim().min(2, 'Enter the customer name').max(120),
   company: optionalText(120),
@@ -40,8 +59,40 @@ export const createCustomerSchema = z.object({
   vat_number: optionalText(32),
   notes: optionalText(1000),
   status: customerStatusSchema.default('ACTIVE'),
+
+  pay_mode: payModeSchema.default('CASH'),
+
+  /**
+   * Also listed as a vendor.
+   *
+   * One record either way: the same company buying from you and selling to you
+   * is still one account, one phone number and one ledger. A separate vendor
+   * record would be a second version of the truth to keep in step.
+   */
+  is_vendor: z.boolean().default(false),
+
+  /**
+   * Last year's closing figure, kept for reference only — it does NOT move the
+   * ledger balance. The opening balance below is what the ledger starts from;
+   * posting both would count the same money twice.
+   */
+  previous_year_balance_baisa: carriedAmount,
+  previous_year_balance_direction: ledgerDirectionSchema.default('DEBIT'),
 });
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
+
+/**
+ * What the "new customer" form sends.
+ *
+ * The opening balance is not a field on the customer: it becomes an OPENING
+ * entry in their ledger, so the balance everything else reads is the sum of
+ * the entries, exactly as it is for every other amount.
+ */
+export const createCustomerWithOpeningSchema = createCustomerSchema.extend({
+  opening_balance_baisa: carriedAmount,
+  opening_balance_direction: ledgerDirectionSchema.default('DEBIT'),
+});
+export type CreateCustomerWithOpeningInput = z.infer<typeof createCustomerWithOpeningSchema>;
 
 /** Every field optional: a PATCH changes what it names and nothing else. */
 export const updateCustomerSchema = createCustomerSchema.partial();
@@ -64,6 +115,11 @@ export type Customer = z.infer<typeof customerSchema>;
 export const customerQuerySchema = z.object({
   q: z.string().trim().max(120).default(''),
   status: z.union([customerStatusSchema, z.literal('ALL')]).default('ALL'),
+  /** The vendors page asks for `true`; the customers page never sets it. */
+  vendor: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .transform((value) => value === true || value === 'true')
+    .optional(),
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(25),
   sort: z.enum(['name', 'created_at', 'updated_at']).default('created_at'),

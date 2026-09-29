@@ -118,7 +118,7 @@ describe('creating', () => {
 
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/name/i), 'Fatma Al Harthy');
-    await user.type(within(dialog).getByLabelText(/phone/i), '+968 9333 4444');
+    await user.type(within(dialog).getByLabelText(/mobile/i), '+968 9333 4444');
     await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
 
     await waitFor(() => {
@@ -140,7 +140,7 @@ describe('creating', () => {
 
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/name/i), 'Fatma Al Harthy');
-    await user.type(within(dialog).getByLabelText(/phone/i), '+968 9333 4444');
+    await user.type(within(dialog).getByLabelText(/mobile/i), '+968 9333 4444');
     await user.type(within(dialog).getByLabelText(/email/i), 'fatma@');
     await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
 
@@ -165,7 +165,7 @@ describe('creating', () => {
 
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/name/i), 'Fatma Al Harthy');
-    await user.type(within(dialog).getByLabelText(/phone/i), '+968 9333 4444');
+    await user.type(within(dialog).getByLabelText(/mobile/i), '+968 9333 4444');
     await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
 
     expect(await screen.findByText('That number is already used')).toBeInTheDocument();
@@ -209,5 +209,80 @@ describe('deleting', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(calls().some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  });
+});
+
+describe('the client’s extra fields', () => {
+  const setup = () =>
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return respond({ customer: customer() }, 201);
+      return respond(page([]));
+    });
+
+  async function openForm() {
+    const user = userEvent.setup();
+    renderApp(<CustomersPage />);
+    await user.click(await screen.findByRole('button', { name: /new customer/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/name/i), 'Ahmed Al Balushi');
+    await user.type(within(dialog).getByLabelText(/mobile/i), '+968 9123 4567');
+    return { user, dialog };
+  }
+
+  const postBody = () => {
+    const post = calls().find(([, init]) => init?.method === 'POST');
+    expect(post).toBeTruthy();
+    return JSON.parse(String(post![1]!.body));
+  };
+
+  it('sends the opening balance in baisa, on the side that was chosen', async () => {
+    setup();
+    const { user, dialog } = await openForm();
+
+    await user.type(within(dialog).getByLabelText(/opening balance/i), '250.500');
+    await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
+
+    await waitFor(() => {
+      // 250.500 OMR is 250,500 baisa — an integer, never a float.
+      expect(postBody()).toMatchObject({
+        opening_balance_baisa: 250_500,
+        opening_balance_direction: 'DEBIT',
+      });
+    });
+  });
+
+  it('keeps last year’s figure separate from the opening balance', async () => {
+    setup();
+    const { user, dialog } = await openForm();
+
+    await user.type(within(dialog).getByLabelText(/previous year balance/i), '90');
+    await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
+
+    await waitFor(() => {
+      const body = postBody();
+      expect(body.previous_year_balance_baisa).toBe(90_000);
+      // Nothing is opened on the ledger by last year's figure.
+      expect(body.opening_balance_baisa).toBe(0);
+    });
+  });
+
+  it('sends the pay mode and the vendor flag', async () => {
+    setup();
+    const { user, dialog } = await openForm();
+
+    await user.click(within(dialog).getByLabelText(/list this customer in the vendor list/i));
+    await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
+
+    await waitFor(() => {
+      expect(postBody()).toMatchObject({ is_vendor: true, pay_mode: 'CASH' });
+    });
+  });
+
+  it('sends no opening balance when the field is left empty', async () => {
+    setup();
+    const { user, dialog } = await openForm();
+    await user.click(within(dialog).getByRole('button', { name: /add customer/i }));
+
+    await waitFor(() => expect(postBody().opening_balance_baisa).toBe(0));
   });
 });

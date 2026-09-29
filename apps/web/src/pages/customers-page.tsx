@@ -43,7 +43,17 @@ import { useCustomers, useDeleteCustomer, type CustomerListParams } from '../lib
 
 const PAGE_SIZE = 25;
 
-export function CustomersPage() {
+export interface CustomersPageProps {
+  /**
+   * The vendors screen is this screen with one filter applied. Vendors are not
+   * a separate kind of record — they are customers with a box ticked — so a
+   * second page would have been the same code with a different title and a
+   * second set of bugs.
+   */
+  vendorsOnly?: boolean;
+}
+
+export function CustomersPage({ vendorsOnly = false }: CustomersPageProps = {}) {
   const [search, setSearch] = useState('');
   // 300ms: long enough that a fast typist sends one request instead of ten,
   // short enough that the list feels like it is keeping up.
@@ -55,7 +65,13 @@ export function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [params, setParams] = useSearchParams();
 
-  const query = useCustomers({ q: debounced, status, page, page_size: PAGE_SIZE });
+  const query = useCustomers({
+    q: debounced,
+    status,
+    page,
+    page_size: PAGE_SIZE,
+    ...(vendorsOnly ? { vendor: true } : {}),
+  });
   const remove = useDeleteCustomer();
 
   /* The command palette opens this modal by navigating to ?new=1, so the
@@ -127,7 +143,7 @@ export function CustomersPage() {
       <div>
         <Group gap="sm">
           <Title order={1} fz={26}>
-            Customers
+            {vendorsOnly ? 'Vendors' : 'Customers'}
           </Title>
           {total > 0 && (
             <Badge variant="light" color="gray" size="lg">
@@ -136,11 +152,13 @@ export function CustomersPage() {
           )}
         </Group>
         <Text c="dimmed" fz="sm" mt={4}>
-          Everyone you sell to. Sales, invoices and ledgers all point back here.
+          {vendorsOnly
+            ? 'Customers you also buy from. Tick “List in the Vendor list” on a customer to add them here.'
+            : 'Everyone you sell to. Sales, invoices and ledgers all point back here.'}
         </Text>
       </div>
       <Button leftSection={<IconPlus size={17} />} onClick={startCreate} size="md">
-        New customer
+        {vendorsOnly ? 'New vendor' : 'New customer'}
       </Button>
     </Group>
   );
@@ -204,7 +222,15 @@ export function CustomersPage() {
             </Stack>
           </Center>
         ) : empty ? (
-          <EmptyState filtered={isFiltered} onCreate={startCreate} onClear={() => { setSearch(''); setStatus('ALL'); }} />
+          <EmptyState
+            filtered={isFiltered}
+            vendorsOnly={vendorsOnly}
+            onCreate={startCreate}
+            onClear={() => {
+              setSearch('');
+              setStatus('ALL');
+            }}
+          />
         ) : (
           <CustomersTable
             rows={rows}
@@ -224,7 +250,12 @@ export function CustomersPage() {
         )}
       </Paper>
 
-      <CustomerModal opened={modalOpen} onClose={closeModal} customer={editing} />
+      <CustomerModal
+        opened={modalOpen}
+        onClose={closeModal}
+        customer={editing}
+        defaultVendor={vendorsOnly}
+      />
     </Stack>
   );
 }
@@ -233,8 +264,9 @@ export function CustomersPage() {
  * Two different empty states, because they are two different situations: an
  * empty system needs a way in, an empty search needs a way back.
  */
-function EmptyState({ filtered, onCreate, onClear }: {
+function EmptyState({ filtered, vendorsOnly, onCreate, onClear }: {
   filtered: boolean;
+  vendorsOnly: boolean;
   onCreate: () => void;
   onClear: () => void;
 }) {
@@ -255,12 +287,18 @@ function EmptyState({ filtered, onCreate, onClear }: {
           {filtered ? <IconUserOff size={26} stroke={1.5} /> : <IconAddressBook size={26} stroke={1.5} />}
         </Box>
         <Text fw={650} fz="lg">
-          {filtered ? 'No customer matches that' : 'No customers yet'}
+          {filtered
+            ? `No ${vendorsOnly ? 'vendor' : 'customer'} matches that`
+            : vendorsOnly
+              ? 'No vendors yet'
+              : 'No customers yet'}
         </Text>
         <Text c="dimmed" fz="sm">
           {filtered
             ? 'Try a shorter search, or clear the filters to see everyone.'
-            : 'Add the first one and it will be available to every sale, invoice and ledger in the system.'}
+            : vendorsOnly
+              ? 'Tick “List this customer in the Vendor list” on any customer, and they appear here as well.'
+              : 'Add the first one and it will be available to every sale, invoice and ledger in the system.'}
         </Text>
         {filtered ? (
           <Button variant="light" onClick={onClear} mt="xs">

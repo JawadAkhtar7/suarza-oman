@@ -35,6 +35,12 @@ export function AppLayout() {
     select: (page) => page.total,
   });
 
+  const vendorCount = useQuery({
+    queryKey: ['customers', 'count', 'vendors'],
+    queryFn: () => api.get<CustomerPage>('/api/customers?page_size=1&vendor=true'),
+    select: (page) => page.total,
+  });
+
   const current = ALL_ITEMS.find((item) =>
     item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to),
   );
@@ -53,7 +59,7 @@ export function AppLayout() {
       <AppShell.Navbar withBorder={false} p={0}>
         <Sidebar
           collapsed={collapsed && !!isDesktop}
-          counts={{ customers: customerCount.data }}
+          counts={{ customers: customerCount.data, vendors: vendorCount.data }}
           onNavigate={closeMobile}
         />
       </AppShell.Navbar>
