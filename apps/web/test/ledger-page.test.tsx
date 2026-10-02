@@ -2,7 +2,7 @@
  * The ledger screens, against a stubbed API.
  *
  * What is worth asserting here is the meaning the UI puts on a number: that a
- * balance is never shown without saying whose money it is, that a void asks for
+ * balance is never shown without saying whose money it is, that cancelling asks for
  * a reason, and that rials typed in the box leave as baisa.
  */
 
@@ -56,6 +56,16 @@ function entry(overrides: Partial<LedgerEntry> = {}): LedgerEntry {
 
 const calls = () => fetchMock.mock.calls as [string, RequestInit | undefined][];
 
+/**
+ * The standing badge, found by being a badge.
+ *
+ * "Debit" is also a column heading and a filter label on these screens, so the
+ * word alone matches three things. What this asserts is that the balance wears
+ * the side it falls on, which is the badge's whole job.
+ */
+const standingBadges = (text: string) =>
+  screen.getAllByText(text).filter((node) => node.className.includes('Badge'));
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
@@ -78,21 +88,22 @@ describe('the ledger list', () => {
     });
   });
 
-  it('leads with what is owed and what is held', async () => {
+  it('leads with the two sides, never netted into one figure', async () => {
     renderApp(<LedgerPage />);
 
     expect(await screen.findByText('OMR 100.000')).toBeInTheDocument();
     expect(screen.getByText('OMR 25.000')).toBeInTheDocument();
     // The two totals are never netted into one figure.
-    expect(screen.getByText('Owed to you')).toBeInTheDocument();
-    expect(screen.getByText('Held in credit')).toBeInTheDocument();
+    expect(screen.getByText('Total debit')).toBeInTheDocument();
+    expect(screen.getByText('Total credit')).toBeInTheDocument();
   });
 
   it('says whose money a balance is, not just how much', async () => {
     renderApp(<LedgerPage />);
 
     expect(await screen.findByText('Ahmed Al Balushi')).toBeInTheDocument();
-    expect(screen.getByText('Owes you')).toBeInTheDocument();
+    // The badge says which side the figure falls on, not just how much.
+    expect(standingBadges('Debit')).not.toHaveLength(0);
   });
 
   it('asks the server to filter by standing rather than filtering the page', async () => {
@@ -100,7 +111,7 @@ describe('the ledger list', () => {
     renderApp(<LedgerPage />);
     await screen.findByText('Ahmed Al Balushi');
 
-    await user.click(screen.getByRole('radio', { name: 'Owing' }));
+    await user.click(screen.getByRole('radio', { name: 'Debit' }));
 
     await waitFor(() => {
       expect(calls().some(([url]) => url.includes('standing=OWING'))).toBe(true);
@@ -116,6 +127,22 @@ describe('one account', () => {
       if (url.includes('/entries')) {
         return respond({ rows: entries, total: entries.length, page: 1, page_size: 50 });
       }
+      if (url.includes('/statement')) {
+        return respond({
+          customer: customer(),
+          statement: {
+            from: null,
+            to: null,
+            opening_balance_baisa: 0,
+            rows: entries,
+            debit_total_baisa: acc.charged_baisa,
+            credit_total_baisa: acc.paid_baisa,
+            closing_balance_baisa: acc.balance_baisa,
+            truncated: false,
+            generated_at: '2026-09-20T08:00:00.000Z',
+          },
+        });
+      }
       return respond({ customer: customer(), account: acc });
     });
   };
@@ -126,18 +153,22 @@ describe('one account', () => {
 
     expect(await screen.findByText('Ahmed Al Balushi')).toBeInTheDocument();
     expect(screen.getByText('OMR 100.000')).toBeInTheDocument();
-    expect(screen.getByText('Owes you')).toBeInTheDocument();
+    expect(standingBadges('Debit')).not.toHaveLength(0);
   });
 
-  it('puts a charge and a payment in different columns', async () => {
+  it('puts a debit and a credit in different columns', async () => {
     setup([
       entry({ id: 'a', description: 'Invoice 104', direction: 'DEBIT', amount_baisa: 150_000, balance_after_baisa: 150_000 }),
       entry({ id: 'b', kind: 'PAYMENT', description: 'Cash received', direction: 'CREDIT', amount_baisa: 50_000, balance_after_baisa: 100_000 }),
     ]);
     renderApp(<LedgerCustomerPage />, { route: '/ledger/507f1f77bcf86cd799439011' });
 
-    const row = (await screen.findByText('Cash received')).closest('tr')!;
-    // The payment sits in the Payment column; its running balance is beside it.
+    /* Scoped to the screen: the printable statement renders the same entries
+       for paper, so an unscoped query would find each description twice. */
+    await screen.findAllByText('Cash received');
+    const onScreen = within(document.querySelector('[data-print="hide"]') as HTMLElement);
+    const row = onScreen.getByText('Cash received').closest('tr')!;
+    // The credit sits in the Credit column; its running balance is beside it.
     expect(within(row).getByText('50.000')).toBeInTheDocument();
     expect(within(row).getByText('100.000')).toBeInTheDocument();
   });
@@ -147,7 +178,7 @@ describe('one account', () => {
     const user = userEvent.setup();
     renderApp(<LedgerCustomerPage />, { route: '/ledger/507f1f77bcf86cd799439011' });
 
-    await user.click(await screen.findByRole('button', { name: /record payment/i }));
+    await user.click(await screen.findByRole('button', { name: /add credit/i }));
     const dialog = await screen.findByRole('dialog');
 
     await user.type(within(dialog).getByLabelText(/amount/i), '12.345');
@@ -179,33 +210,33 @@ describe('one account', () => {
     expect(calls().some(([url, init]) => init?.method === 'POST' && url.includes('/entries'))).toBe(false);
   });
 
-  it('will not void an entry without a reason', async () => {
+  it('will not cancel an entry without a reason', async () => {
     setup();
     const user = userEvent.setup();
     renderApp(<LedgerCustomerPage />, { route: '/ledger/507f1f77bcf86cd799439011' });
 
     await user.click(await screen.findByRole('button', { name: /actions for invoice 104/i }));
-    await user.click(await screen.findByRole('menuitem', { name: /void entry/i }));
+    await user.click(await screen.findByRole('menuitem', { name: /cancel entry/i }));
 
     const confirm = await screen.findByRole('dialog');
-    await user.click(within(confirm).getByRole('button', { name: /void entry/i }));
+    await user.click(within(confirm).getByRole('button', { name: /^cancel it$/i }));
 
-    // Nothing is sent: the reason is the point of voiding rather than deleting.
-    await waitFor(() => expect(screen.getByText(/a reason is needed/i)).toBeInTheDocument());
+    // Nothing is sent: the reason is the point of cancelling rather than deleting.
+    await waitFor(() => expect(screen.getByText(/please give a reason/i)).toBeInTheDocument());
     expect(calls().some(([url]) => url.includes('/void'))).toBe(false);
   });
 
-  it('voids with the reason once one is given', async () => {
+  it('cancels with the reason once one is given', async () => {
     setup();
     const user = userEvent.setup();
     renderApp(<LedgerCustomerPage />, { route: '/ledger/507f1f77bcf86cd799439011' });
 
     await user.click(await screen.findByRole('button', { name: /actions for invoice 104/i }));
-    await user.click(await screen.findByRole('menuitem', { name: /void entry/i }));
+    await user.click(await screen.findByRole('menuitem', { name: /cancel entry/i }));
 
     const confirm = await screen.findByRole('dialog');
-    await user.type(within(confirm).getByLabelText(/why is it being voided/i), 'Entered twice');
-    await user.click(within(confirm).getByRole('button', { name: /void entry/i }));
+    await user.type(within(confirm).getByLabelText(/why are you cancelling it/i), 'Entered twice');
+    await user.click(within(confirm).getByRole('button', { name: /^cancel it$/i }));
 
     await waitFor(() => {
       const call = calls().find(([url]) => url.includes('/void'));

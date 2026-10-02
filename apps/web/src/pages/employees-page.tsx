@@ -206,7 +206,7 @@ export function EmployeesPage() {
         <Tile
           label="Monthly cost"
           value={formatOMR(summary.data?.monthly_payroll_baisa ?? 0)}
-          hint="Daily and hourly rates counted as 26 days"
+          hint="Daily and hourly pay counted as 26 days a month"
           icon={<IconWallet size={21} stroke={1.7} />}
           color="gray"
           loading={summary.isLoading}
@@ -214,7 +214,7 @@ export function EmployeesPage() {
         <Tile
           label="On leave"
           value={String(summary.data?.on_leave ?? 0)}
-          hint="Away but still employed"
+          hint="Away but still working here"
           icon={<IconCalendarUser size={21} stroke={1.7} />}
           color="orange"
           loading={summary.isLoading}
@@ -294,7 +294,7 @@ export function EmployeesPage() {
               <Text c="dimmed" fz="sm">
                 {isFiltered
                   ? 'Try a shorter search, or clear the filters.'
-                  : 'Add the first one — payroll, deliveries and sales will all point back here.'}
+                  : 'Add the first one. Pay, deliveries and sales all link back here.'}
               </Text>
               {!isFiltered && (
                 <Button mt="xs" leftSection={<IconPlus size={17} />} onClick={startCreate}>

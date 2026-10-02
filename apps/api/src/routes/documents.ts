@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { Types, isValidObjectId } from 'mongoose';
 import {
   createDocumentSchema,
+  documentKindSchema,
   documentQuerySchema,
   documentTotals,
   priceLine,
@@ -21,9 +22,11 @@ import {
 import {
   TradeDocumentModel,
   nextDocumentNumber,
+  peekDocumentNumber,
   toTradeDocument,
 } from '../models/trade-document.model.js';
 import { CustomerModel } from '../models/customer.model.js';
+import { EmployeeModel } from '../models/employee.model.js';
 import { ProductModel } from '../models/product.model.js';
 import { StockMovementModel } from '../models/stock-movement.model.js';
 import { LedgerEntryModel } from '../models/ledger-entry.model.js';
@@ -37,21 +40,59 @@ function requireId(id: unknown, what = 'Document'): string {
   return id;
 }
 
-/** SALE takes stock out and puts the party in debit; PURCHASE does the reverse. */
+/**
+ * What posting each kind of document does.
+ *
+ * Spelled out per kind rather than worked out from a comparison, because a
+ * sales return is a sale in reverse on the ledger but NOT in reverse on the
+ * stock - the goods come back in, the same way a purchase does. Any rule
+ * clever enough to derive both from one flag gets one of them wrong.
+ */
 const EFFECTS = {
   SALE: {
     stockDirection: 'OUT' as const,
     stockKind: 'SALE' as const,
     ledgerKind: 'CHARGE' as const,
+    ledgerDirection: 'DEBIT' as const,
     settledKind: 'PAYMENT' as const,
+    settledDirection: 'CREDIT' as const,
     noun: 'Invoice',
+    party: 'Customer',
   },
   PURCHASE: {
     stockDirection: 'IN' as const,
     stockKind: 'PURCHASE' as const,
     ledgerKind: 'BILL' as const,
+    ledgerDirection: 'CREDIT' as const,
     settledKind: 'PAYMENT_MADE' as const,
+    settledDirection: 'DEBIT' as const,
     noun: 'Purchase',
+    party: 'Supplier',
+  },
+  /* Goods back on the shelf, and the customer owes us less than the invoice
+     said. Settled "now" means we handed the money back, which is why it
+     settles with a payment out rather than a payment in. */
+  SALE_RETURN: {
+    stockDirection: 'IN' as const,
+    stockKind: 'SALE_RETURN' as const,
+    ledgerKind: 'CREDIT_NOTE' as const,
+    ledgerDirection: 'CREDIT' as const,
+    settledKind: 'PAYMENT_MADE' as const,
+    settledDirection: 'DEBIT' as const,
+    noun: 'Sales return',
+    party: 'Customer',
+  },
+  /* Goods back to the supplier: off our shelf, and we owe them less than their
+     bill said. Settled "now" means they refunded us. */
+  PURCHASE_RETURN: {
+    stockDirection: 'OUT' as const,
+    stockKind: 'PURCHASE_RETURN' as const,
+    ledgerKind: 'DEBIT_NOTE' as const,
+    ledgerDirection: 'DEBIT' as const,
+    settledKind: 'PAYMENT' as const,
+    settledDirection: 'CREDIT' as const,
+    noun: 'Purchase return',
+    party: 'Supplier',
   },
 };
 
@@ -59,7 +100,15 @@ function searchFilter(q: string) {
   if (!q) return {};
   const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const like = { $regex: safe, $options: 'i' };
-  return { $or: [{ number: like }, { party_name: like }, { reference: like }] };
+  return {
+    $or: [
+      { number: like },
+      { party_name: like },
+      { reference: like },
+      { against_invoice_number: like },
+      { salesman_name: like },
+    ],
+  };
 }
 
 documentsRouter.get(
@@ -140,6 +189,18 @@ documentsRouter.get(
   }),
 );
 
+/**
+ * What the next bill number will be, so the form can show it before saving.
+ * A peek, not a reservation - see peekDocumentNumber.
+ */
+documentsRouter.get(
+  '/next-number',
+  handle(async (req, res) => {
+    const kind = documentKindSchema.parse(req.query['kind'] ?? 'SALE');
+    res.json({ number: await peekDocumentNumber(kind) });
+  }),
+);
+
 documentsRouter.get(
   '/:id',
   handle(async (req, res) => {
@@ -158,12 +219,26 @@ documentsRouter.post(
     const party = await CustomerModel.findById(
       isValidObjectId(input.party_id) ? input.party_id : undefined,
     ).lean();
-    if (!party) throw ApiError.notFound(input.kind === 'SALE' ? 'Customer' : 'Supplier');
+    if (!party) throw ApiError.notFound(effects.party);
 
     /* Priced here, not trusted from the client: a total is the one thing on a
        document that somebody might want to be wrong. */
+    /* The salesman's name is copied from the employee record rather than taken
+       from the form, for the same reason the party's is: the invoice has to go
+       on saying who sold it after they leave and the record is edited. */
+    let salesman: { id: unknown; name: string } | null = null;
+    if (input.salesman_id) {
+      const employee = await EmployeeModel.findById(
+        isValidObjectId(input.salesman_id) ? input.salesman_id : undefined,
+      )
+        .select('name')
+        .lean();
+      if (!employee) throw ApiError.notFound('Salesman');
+      salesman = { id: employee._id, name: employee.name };
+    }
+
     const lines = input.lines.map((line) => ({ ...line, ...priceLine(line) }));
-    const totals = documentTotals(lines);
+    const totals = documentTotals(lines, input.discount_baisa);
     const number = await nextDocumentNumber(input.kind);
 
     const doc = await TradeDocumentModel.create({
@@ -173,7 +248,10 @@ documentsRouter.post(
       party_name: party.name,
       document_date: input.document_date,
       reference: input.reference,
+      against_invoice_number: input.against_invoice_number,
       settlement: input.settlement,
+      salesman_id: salesman?.id ?? null,
+      salesman_name: salesman?.name ?? '',
       lines: lines.map((line) => ({
         ...line,
         product_id: line.product_id && isValidObjectId(line.product_id) ? line.product_id : null,
@@ -214,6 +292,7 @@ documentsRouter.post(
      */
     const entries: {
       customer_id: unknown;
+      document_id: unknown;
       kind: string;
       direction: 'DEBIT' | 'CREDIT';
       amount_baisa: number;
@@ -223,8 +302,9 @@ documentsRouter.post(
     }[] = [
       {
         customer_id: party._id,
+        document_id: doc._id,
         kind: effects.ledgerKind,
-        direction: input.kind === 'SALE' ? ('DEBIT' as const) : ('CREDIT' as const),
+        direction: effects.ledgerDirection,
         amount_baisa: totals.total_baisa,
         description: `${effects.noun} ${number}`,
         reference: input.reference || number,
@@ -236,8 +316,9 @@ documentsRouter.post(
     if (input.settlement === 'PAID') {
       entries.push({
         customer_id: party._id,
+        document_id: doc._id,
         kind: effects.settledKind,
-        direction: input.kind === 'SALE' ? ('CREDIT' as const) : ('DEBIT' as const),
+        direction: effects.settledDirection,
         amount_baisa: totals.total_baisa,
         description: `${effects.noun} ${number} — settled`,
         reference: input.reference || number,
@@ -260,7 +341,7 @@ documentsRouter.post(
     if (!doc) throw ApiError.notFound('Document');
     if (doc.status === 'VOID') throw ApiError.conflict('This document is already voided');
 
-    const effects = EFFECTS[doc.kind as 'SALE' | 'PURCHASE'];
+    const effects = EFFECTS[doc.kind as keyof typeof EFFECTS];
 
     /* Stock is put back by writing the opposite movements, not by deleting the
        originals — "we had 40 bags on Tuesday" has to stay answerable. */
@@ -278,11 +359,31 @@ documentsRouter.post(
     if (reversals.length > 0) await StockMovementModel.insertMany(reversals);
 
     /* The ledger has its own voiding, which keeps the rows and stops them
-       counting — exactly what is wanted here. */
-    await LedgerEntryModel.updateMany(
-      { customer_id: doc.party_id, reference: { $in: [doc.number, doc.reference || doc.number] }, voided_at: null },
-      { $set: { voided_at: new Date(), void_reason: `${effects.noun} ${doc.number} voided — ${void_reason}` } },
+       counting — exactly what is wanted here.
+     *
+     * Found by document id. The older reference match is kept as a fallback for
+     * entries written before that field existed, and is narrowed by customer
+     * and by amount so it cannot reach an unrelated document that happens to
+     * share a bill number. */
+    const voidedAs = `${effects.noun} ${doc.number} voided — ${void_reason}`;
+    const voidPatch = { $set: { voided_at: new Date(), void_reason: voidedAs } };
+
+    const byDocument = await LedgerEntryModel.updateMany(
+      { document_id: doc._id, voided_at: null },
+      voidPatch,
     );
+    if (byDocument.modifiedCount === 0) {
+      await LedgerEntryModel.updateMany(
+        {
+          customer_id: doc.party_id,
+          document_id: null,
+          reference: { $in: [doc.number, doc.reference || doc.number] },
+          amount_baisa: doc.total_baisa,
+          voided_at: null,
+        },
+        voidPatch,
+      );
+    }
 
     doc.status = 'VOID';
     doc.void_reason = void_reason;

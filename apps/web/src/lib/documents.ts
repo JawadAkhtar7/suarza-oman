@@ -48,6 +48,20 @@ export function useDocumentSummary(kind: DocumentKind) {
   });
 }
 
+/**
+ * The number the next document will most likely get. Refetched whenever the
+ * form mounts, and never cached between visits: a stale bill number on screen
+ * is worse than a brief blank one.
+ */
+export function useNextDocumentNumber(kind: DocumentKind) {
+  return useQuery({
+    queryKey: ['documents', 'next-number', kind],
+    queryFn: () => api.get<{ number: string }>(`/api/documents/next-number${queryString({ kind })}`),
+    select: (data) => data.number,
+    staleTime: 0,
+  });
+}
+
 export function useDocument(id: string) {
   return useQuery({
     queryKey: keys.one(id),

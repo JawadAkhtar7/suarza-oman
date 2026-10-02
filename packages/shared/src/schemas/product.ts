@@ -130,7 +130,14 @@ export interface Product {
 
 /* --- Stock movements ------------------------------------------------------ */
 
-export const STOCK_KINDS = ['OPENING', 'PURCHASE', 'SALE', 'ADJUSTMENT'] as const;
+export const STOCK_KINDS = [
+  'OPENING',
+  'PURCHASE',
+  'SALE',
+  'SALE_RETURN',
+  'PURCHASE_RETURN',
+  'ADJUSTMENT',
+] as const;
 export const stockKindSchema = z.enum(STOCK_KINDS);
 export type StockKind = z.infer<typeof stockKindSchema>;
 
@@ -138,6 +145,8 @@ export const STOCK_KIND_LABELS: Record<StockKind, string> = {
   OPENING: 'Opening stock',
   PURCHASE: 'Purchase',
   SALE: 'Sale',
+  SALE_RETURN: 'Sales return',
+  PURCHASE_RETURN: 'Purchase return',
   ADJUSTMENT: 'Adjustment',
 };
 
@@ -150,6 +159,8 @@ export const STOCK_KIND_DIRECTION: Record<StockKind, StockDirection | null> = {
   OPENING: 'IN',
   PURCHASE: 'IN',
   SALE: 'OUT',
+  SALE_RETURN: 'IN',
+  PURCHASE_RETURN: 'OUT',
   ADJUSTMENT: null,
 };
 

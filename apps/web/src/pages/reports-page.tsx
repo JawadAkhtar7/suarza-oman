@@ -222,8 +222,12 @@ export function ReportsPage() {
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
         <Kpi
           label="Sales"
-          value={formatOMR(report?.sales.total_baisa ?? 0)}
-          hint={`${report?.sales.count ?? 0} ${report?.sales.count === 1 ? 'document' : 'documents'} in this period`}
+          value={formatOMR(report?.net_sales_baisa ?? 0)}
+          hint={
+            report?.sale_returns.count
+              ? `${report.sales.count} invoices, less ${formatOMR(report.sale_returns.total_baisa)} returned`
+              : `${report?.sales.count ?? 0} ${report?.sales.count === 1 ? 'invoice' : 'invoices'} in this period`
+          }
           icon={<IconShoppingCart size={22} stroke={1.7} />}
           color="brand"
           loading={query.isLoading}
@@ -231,25 +235,29 @@ export function ReportsPage() {
         />
         <Kpi
           label="Purchases"
-          value={formatOMR(report?.purchases.total_baisa ?? 0)}
-          hint={`${report?.purchases.count ?? 0} ${report?.purchases.count === 1 ? 'document' : 'documents'} in this period`}
+          value={formatOMR(report?.net_purchases_baisa ?? 0)}
+          hint={
+            report?.purchase_returns.count
+              ? `${report.purchases.count} purchases, less ${formatOMR(report.purchase_returns.total_baisa)} returned`
+              : `${report?.purchases.count ?? 0} ${report?.purchases.count === 1 ? 'purchase' : 'purchases'} in this period`
+          }
           icon={<IconBuildingWarehouse size={22} stroke={1.7} />}
           color="blue"
           loading={query.isLoading}
         />
         <Kpi
-          label="Estimated margin"
+          label="Rough profit"
           value={formatOMR(report?.margin_baisa ?? 0)}
-          hint="Sales less what those goods cost today"
+          hint="Sales, less what the goods cost you"
           icon={<IconTrendingUp size={22} stroke={1.7} />}
           color={(report?.margin_baisa ?? 0) < 0 ? 'red' : 'teal'}
           loading={query.isLoading}
           trend={(report?.margin_baisa ?? 0) < 0 ? 'down' : 'up'}
         />
         <Kpi
-          label="Stock on hand"
+          label="Stock you have"
           value={formatOMR(report?.stock_value_baisa ?? 0)}
-          hint="Valued at cost, right now"
+          hint="At cost price, right now"
           icon={<IconPackages size={22} stroke={1.7} />}
           color="orange"
           loading={query.isLoading}
@@ -259,8 +267,8 @@ export function ReportsPage() {
       <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
         <Card withBorder radius="lg" padding="lg" style={{ gridColumn: isWide ? 'span 2' : undefined }}>
           <PanelTitle
-            title="Trade over time"
-            hint={series.length > 62 ? 'Weekly totals' : 'Daily totals, in rials'}
+            title="Sales and purchases over time"
+            hint={series.length > 62 ? 'Each week, in rials' : 'Each day, in rials'}
             icon={<IconTrendingUp size={18} stroke={1.7} />}
           />
           {query.isLoading ? (
@@ -345,7 +353,7 @@ export function ReportsPage() {
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
         <Card withBorder radius="lg" padding="lg">
           <PanelTitle
-            title="What sold most"
+            title="What sold the most"
             hint="By value, before VAT"
             icon={<IconReceipt2 size={18} stroke={1.7} />}
           />
@@ -373,7 +381,7 @@ export function ReportsPage() {
 
         <Card withBorder radius="lg" padding="lg">
           <PanelTitle
-            title="Who bought most"
+            title="Who bought the most"
             hint="By value, before VAT"
             icon={<IconUsers size={18} stroke={1.7} />}
           />
@@ -420,14 +428,14 @@ export function ReportsPage() {
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
         <Paper withBorder radius="lg" p="lg">
           <PanelTitle
-            title="Money owed"
-            hint="Across every account, right now"
+            title="Account balances"
+            hint="Right now"
             icon={<IconCoins size={18} stroke={1.7} />}
           />
           <SimpleGrid cols={2} spacing="lg">
             <div>
               <Text fz="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: '0.06em' }}>
-                Owed to you
+                Total debit
               </Text>
               <Text fz={24} fw={700} c="red" mt={4} style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatOMR(report?.receivable_baisa ?? 0)}
@@ -435,7 +443,7 @@ export function ReportsPage() {
             </div>
             <div>
               <Text fz="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: '0.06em' }}>
-                You owe
+                Total credit
               </Text>
               <Text fz={24} fw={700} c="orange" mt={4} style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatOMR(report?.payable_baisa ?? 0)}
@@ -449,7 +457,7 @@ export function ReportsPage() {
         </Paper>
 
         <Paper withBorder radius="lg" p="lg">
-          <PanelTitle title="VAT in this period" hint="Collected against paid" icon={<IconReceipt2 size={18} stroke={1.7} />} />
+          <PanelTitle title="VAT for these dates" hint="What you took in, against what you paid" icon={<IconReceipt2 size={18} stroke={1.7} />} />
           <Table withRowBorders={false} verticalSpacing="xs">
             <Table.Tbody>
               <Table.Tr>
@@ -483,7 +491,7 @@ export function ReportsPage() {
                   </Text>
                 </Table.Td>
                 <Table.Td ta="right">
-                  <Tooltip label="A rough figure, not a filing — it counts documents in this period only">
+                  <Tooltip label="A rough figure, not your tax return. It only counts documents between these dates.">
                     <Text fz="sm" fw={700} style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {formatOMR((report?.sales.vat_baisa ?? 0) - (report?.purchases.vat_baisa ?? 0))}
                     </Text>

@@ -339,3 +339,110 @@ describe('deleting a customer who has a ledger', () => {
     expect((await request(app).delete(`/api/customers/${id}`)).status).toBe(200);
   });
 });
+
+describe('the printed statement', () => {
+  const statementOf = (id: string, query = '') =>
+    request(app).get(`/api/ledger/customers/${id}/statement${query}`);
+
+  it('opens at zero and reads oldest first over the whole account', async () => {
+    const id = await makeCustomer();
+    await addEntry(id, charge(15_000, { entry_date: '2026-03-01', reference: 'A' }));
+    await addEntry(id, payment(5_000, { entry_date: '2026-03-05', reference: 'B' }));
+    await addEntry(id, charge(2_000, { entry_date: '2026-03-09', reference: 'C' }));
+
+    const { body } = await statementOf(id);
+
+    expect(body.statement.opening_balance_baisa).toBe(0);
+    expect(body.statement.rows.map((row: { reference: string }) => row.reference)).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+    expect(body.statement.rows.map((row: { balance_after_baisa: number }) => row.balance_after_baisa))
+      .toEqual([15_000, 10_000, 12_000]);
+    expect(body.statement.debit_total_baisa).toBe(17_000);
+    expect(body.statement.credit_total_baisa).toBe(5_000);
+    expect(body.statement.closing_balance_baisa).toBe(12_000);
+  });
+
+  it('carries what came before the period into the opening balance', async () => {
+    const id = await makeCustomer();
+    await addEntry(id, charge(15_000, { entry_date: '2026-03-01' }));
+    await addEntry(id, charge(2_000, { entry_date: '2026-06-10', reference: 'IN' }));
+
+    const { body } = await statementOf(id, '?from=2026-06-01&to=2026-06-30');
+
+    expect(body.statement.opening_balance_baisa).toBe(15_000);
+    expect(body.statement.rows).toHaveLength(1);
+    expect(body.statement.rows[0].reference).toBe('IN');
+    // The running balance continues from the opening figure, not from zero.
+    expect(body.statement.rows[0].balance_after_baisa).toBe(17_000);
+    expect(body.statement.closing_balance_baisa).toBe(17_000);
+  });
+
+  it('closes on the same figure the last row shows', async () => {
+    const id = await makeCustomer();
+    await addEntry(id, charge(7_500, { entry_date: '2026-01-04' }));
+    await addEntry(id, payment(2_500, { entry_date: '2026-02-04' }));
+    await addEntry(id, charge(1_250, { entry_date: '2026-03-04' }));
+
+    const { body } = await statementOf(id, '?from=2026-02-01');
+    const rows = body.statement.rows;
+
+    expect(rows.at(-1).balance_after_baisa).toBe(body.statement.closing_balance_baisa);
+  });
+
+  it('leaves voided entries off it entirely', async () => {
+    const id = await makeCustomer();
+    const kept = await addEntry(id, charge(10_000, { entry_date: '2026-03-01' }));
+    const dropped = await addEntry(id, charge(4_000, { entry_date: '2026-03-02' }));
+
+    await request(app)
+      .post(`/api/ledger/entries/${dropped.body.entry.id}/void`)
+      .send({ void_reason: 'Entered twice' });
+
+    const { body } = await statementOf(id);
+
+    expect(body.statement.rows).toHaveLength(1);
+    expect(body.statement.rows[0].id).toBe(kept.body.entry.id);
+    expect(body.statement.closing_balance_baisa).toBe(10_000);
+  });
+
+  it('excludes an entry dated before the period starts', async () => {
+    const id = await makeCustomer();
+    await addEntry(id, charge(1_000, { entry_date: '2026-05-31' }));
+
+    const { body } = await statementOf(id, '?from=2026-06-01');
+
+    expect(body.statement.rows).toHaveLength(0);
+    expect(body.statement.opening_balance_baisa).toBe(1_000);
+    expect(body.statement.closing_balance_baisa).toBe(1_000);
+  });
+
+  it('says so rather than stopping short when there are too many entries', async () => {
+    const id = await makeCustomer();
+    for (let i = 0; i < 4; i += 1) {
+      await addEntry(id, charge(1_000, { entry_date: '2026-04-01' }));
+    }
+
+    const { body } = await statementOf(id, '?limit=2');
+
+    expect(body.statement.rows).toHaveLength(2);
+    expect(body.statement.truncated).toBe(true);
+    // The totals still cover the whole period, which is why the sheet warns.
+    expect(body.statement.closing_balance_baisa).toBe(4_000);
+  });
+
+  it('carries who the account belongs to, for the top of the sheet', async () => {
+    const id = await makeCustomer({ name: 'Mujahid Pak' });
+    const { body } = await statementOf(id);
+
+    expect(body.customer.name).toBe('Mujahid Pak');
+    expect(body.statement.generated_at).toBeTruthy();
+  });
+
+  it('is a 404 for an account that does not exist', async () => {
+    const response = await statementOf('64b7f3d2c1a4e5f6a7b8c9d0');
+    expect(response.status).toBe(404);
+  });
+});

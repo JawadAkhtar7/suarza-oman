@@ -18,7 +18,7 @@ const STANDING = {
   OK: { label: 'In stock', color: 'brand' },
   LOW: { label: 'Low', color: 'orange' },
   OUT: { label: 'Out of stock', color: 'red' },
-  UNTRACKED: { label: 'Not stocked', color: 'gray' },
+  UNTRACKED: { label: 'Not counted', color: 'gray' },
 } as const;
 
 export function StockBadge({ product }: { product: Product }) {

@@ -19,7 +19,7 @@ export function CommandPalette() {
     {
       id: 'new-customer',
       label: 'New customer',
-      description: 'Add a customer record',
+      description: 'Add a new customer',
       leftSection: <IconPlus size={18} stroke={1.6} />,
       group: 'Actions',
       // The page owns the modal, so the palette asks for it through the URL
@@ -44,7 +44,7 @@ export function CommandPalette() {
       highlightQuery
       searchProps={{
         leftSection: <IconSearch size={18} stroke={1.6} />,
-        placeholder: 'Search pages and actions…',
+        placeholder: 'Search pages and jobs…',
       }}
     />
   );

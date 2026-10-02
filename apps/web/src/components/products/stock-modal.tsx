@@ -51,10 +51,12 @@ interface FormValues {
 }
 
 const KIND_HELP: Record<StockKind, string> = {
-  PURCHASE: 'Stock arrived from a supplier.',
+  PURCHASE: 'Stock came in from a vendor.',
   SALE: 'Stock left because it was sold.',
-  ADJUSTMENT: 'A stock count, breakage or correction. Choose which way it moves.',
-  OPENING: 'What was on hand when this product was added.',
+  SALE_RETURN: 'Stock came back from a customer. Added by a sales return.',
+  PURCHASE_RETURN: 'Stock went back to a vendor. Added by a purchase return.',
+  ADJUSTMENT: 'A stock count, breakage, or a fix. Pick which way it moves.',
+  OPENING: 'What you had when this product was added.',
 };
 
 function initialValues(): FormValues {
@@ -231,7 +233,7 @@ export function StockModal({ opened, onClose, product }: StockModalProps) {
             >
               <Text fz="sm">
                 On hand after this: <strong>{formatQuantity(after)} {unit}</strong>
-                {after < 0 && ' — that is more than was ever recorded as coming in'}
+                {after < 0 && ' — that is more than has ever come in'}
               </Text>
             </Alert>
           )}

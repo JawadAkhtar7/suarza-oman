@@ -154,7 +154,7 @@ export function ProductPage() {
                 ? item.reorder_level_milli > 0
                   ? `Warn below ${formatQuantity(item.reorder_level_milli)} ${unit}`
                   : 'No warning level set'
-                : 'Stock is not tracked'
+                : 'Stock is not counted'
             }
           />
           <Fact label="Cost" value={formatOMR(item.cost_price_baisa)} hint={`per ${unit}`} />
@@ -166,7 +166,7 @@ export function ProductPage() {
           <Fact
             label="Stock value"
             value={formatOMR(Math.max(0, item.stock_milli) * item.cost_price_baisa / 1000)}
-            hint="On hand, at cost"
+            hint="What you have, at cost price"
           />
         </SimpleGrid>
 

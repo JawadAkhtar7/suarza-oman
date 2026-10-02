@@ -1,10 +1,10 @@
 /**
  * Writing an entry.
  *
- * The form asks the question in the office's words — is this something they now
- * owe, or something they have paid — and works out debit and credit from the
- * answer. Nobody typing an invoice number should have to remember which way
- * round a debit goes.
+ * Debit adds to the balance, credit takes off it. The help line under the
+ * choice says so in full, so nobody has to carry the rule in their head while
+ * typing an invoice number — but the words on the buttons are the ones the
+ * client's own books use.
  */
 
 import { useEffect, useState } from 'react';
@@ -48,10 +48,10 @@ interface FormValues {
 }
 
 const KIND_HELP: Partial<Record<LedgerKind, string>> = {
-  CHARGE: 'Adds to what this customer owes you — an invoice, a delivery, a service.',
-  PAYMENT: 'Reduces what they owe — cash, transfer or cheque received.',
-  ADJUSTMENT: 'A correction, a discount or a write-off. Choose which way it moves.',
-  OPENING: 'What they already owed when this ledger started. Choose which way it moves.',
+  CHARGE: 'Debit — adds to the balance. An invoice, a delivery, a job done.',
+  PAYMENT: 'Credit — takes off the balance. Cash, transfer or cheque received.',
+  ADJUSTMENT: 'A fix, a discount, or an amount written off. Pick debit or credit.',
+  OPENING: 'What the balance was when this account started.',
 };
 
 function initialValues(intent: EntryModalProps['intent']): FormValues {
@@ -170,15 +170,15 @@ export function EntryModal({
               }
             }}
             data={[
-              { label: 'Charge', value: 'CHARGE' },
-              { label: 'Payment', value: 'PAYMENT' },
+              { label: 'Debit', value: 'CHARGE' },
+              { label: 'Credit', value: 'PAYMENT' },
               { label: 'Adjustment', value: 'ADJUSTMENT' },
               { label: 'Opening', value: 'OPENING' },
             ]}
           />
 
           <Text fz="xs" c="dimmed" mt={-8}>
-            {KIND_HELP[kind] ?? 'Posted from a sale or a purchase.'}
+            {KIND_HELP[kind] ?? 'Added by a sale or a purchase.'}
           </Text>
 
           {needsDirection && (
@@ -190,8 +190,8 @@ export function EntryModal({
                 form.setFieldValue('direction', value as LedgerDirection);
               }}
               data={[
-                { label: 'They owe more', value: 'DEBIT' },
-                { label: 'They owe less', value: 'CREDIT' },
+                { label: 'Debit', value: 'DEBIT' },
+                { label: 'Credit', value: 'CREDIT' },
               ]}
             />
           )}
@@ -226,7 +226,7 @@ export function EntryModal({
           <TextInput
             label="Reference"
             placeholder="INV-104, cheque 887421, transfer id…"
-            description="Whatever ties this to paper"
+            description="The number on the paper, if there is one"
             {...form.getInputProps('reference')}
           />
 
@@ -249,7 +249,7 @@ export function EntryModal({
             >
               <Text fz="sm">
                 Balance after this entry: <strong>{formatOMR(Math.abs(preview))}</strong>{' '}
-                {preview > 0 ? 'owed to you' : preview < 0 ? 'in credit' : '— settled'}
+                {preview > 0 ? 'Debit' : preview < 0 ? 'Credit' : '— nothing left'}
               </Text>
             </Alert>
           )}

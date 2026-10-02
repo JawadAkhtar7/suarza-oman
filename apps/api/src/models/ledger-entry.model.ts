@@ -19,6 +19,17 @@ const ledgerEntrySchema = new Schema(
     amount_baisa: { type: Number, required: true, min: 1 },
     description: { type: String, required: true, trim: true, maxlength: 300 },
     reference: { type: String, default: '', trim: true, maxlength: 60 },
+    /**
+     * The document that posted this entry, when one did.
+     *
+     * Voiding used to find these entries by matching the reference string.
+     * That stopped being safe the moment sales and sales returns both started
+     * at bill number 1: voiding return 1 would have reached into invoice 1's
+     * entry on the same customer. An id cannot be ambiguous.
+     *
+     * Null for anything typed in by hand, which is most of the ledger.
+     */
+    document_id: { type: Schema.Types.ObjectId, ref: 'TradeDocument', default: null },
     entry_date: { type: Date, required: true },
     voided_at: { type: Date, default: null },
     void_reason: { type: String, default: null },
@@ -34,6 +45,8 @@ const ledgerEntrySchema = new Schema(
    serves the statement, the balance and the totals on the list. */
 ledgerEntrySchema.index({ customer_id: 1, entry_date: 1, _id: 1 });
 ledgerEntrySchema.index({ customer_id: 1, voided_at: 1 });
+/* Sparse: only document-posted entries carry one, and voiding looks them up. */
+ledgerEntrySchema.index({ document_id: 1 }, { sparse: true });
 
 export type LedgerEntryDoc = InferSchemaType<typeof ledgerEntrySchema>;
 

@@ -29,6 +29,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core';
+import { DateInput } from '@mantine/dates';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -39,6 +40,7 @@ import {
   IconMinus,
   IconPencil,
   IconPlus,
+  IconPrinter,
   IconReceipt2,
 } from '@tabler/icons-react';
 import {
@@ -50,8 +52,34 @@ import {
   type LedgerEntry,
 } from '@suarza-oman/shared';
 import { EntryModal } from '../components/ledger/entry-modal.js';
+import { AccountStatement } from '../components/ledger/account-statement.js';
 import { STANDING_LABEL, standingColor } from '../components/ledger/balance.js';
-import { useLedgerAccount, useLedgerEntries, useUpdateLedgerEntry, useVoidLedgerEntry } from '../lib/ledger.js';
+import {
+  useLedgerAccount,
+  useLedgerEntries,
+  useLedgerStatement,
+  useUpdateLedgerEntry,
+  useVoidLedgerEntry,
+} from '../lib/ledger.js';
+
+/**
+ * A date the server can bracket on.
+ *
+ * Built in UTC from the calendar day that was picked, rather than from the
+ * browser's own midnight: entries are stored at UTC midnight on their date, and
+ * a Muscat-local end-of-day would fall four hours short and quietly drop
+ * everything dated on the last day of the period.
+ */
+function dayBound(date: Date | null, edge: 'start' | 'end'): string {
+  if (!date) return '';
+  const ms = Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    ...(edge === 'start' ? ([0, 0, 0, 0] as const) : ([23, 59, 59, 999] as const)),
+  );
+  return new Date(ms).toISOString();
+}
 
 export function LedgerCustomerPage() {
   const { customerId = '' } = useParams();
@@ -60,8 +88,14 @@ export function LedgerCustomerPage() {
   const [modalOpen, { open: openModal, close: closeModal }] = useDisclosure(false);
   const isWide = useMediaQuery('(min-width: 48em)', true);
 
+  /* The printed statement's period. Open at the start by default, so the first
+     print of a new account says "Beginning" and opens at zero. */
+  const [from, setFrom] = useState<Date | null>(null);
+  const [to, setTo] = useState<Date | null>(new Date());
+
   const account = useLedgerAccount(customerId);
   const entries = useLedgerEntries(customerId, page);
+  const statement = useLedgerStatement(customerId, dayBound(from, 'start'), dayBound(to, 'end'));
   const voidEntry = useVoidLedgerEntry();
   const updateEntry = useUpdateLedgerEntry();
 
@@ -98,10 +132,26 @@ export function LedgerCustomerPage() {
     openModal();
   };
 
+  /* Refetched before printing rather than trusting the cache: somebody prints a
+     statement precisely because they just recorded a payment on it. */
+  const printStatement = async () => {
+    try {
+      const fresh = await statement.refetch();
+      if (!fresh.data) throw new Error('The statement could not be made');
+      window.print();
+    } catch (error) {
+      notifications.show({
+        title: 'Could not print the statement',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        color: 'red',
+      });
+    }
+  };
+
   const confirmVoid = (entry: LedgerEntry) => {
     let reason = '';
     modals.openConfirmModal({
-      title: 'Void this entry?',
+      title: 'Cancel this entry?',
       centered: true,
       children: (
         <Stack gap="sm">
@@ -110,11 +160,11 @@ export function LedgerCustomerPage() {
             {entry.description}
           </Text>
           <Text size="sm" c="dimmed">
-            It stops counting towards the balance but stays on the statement, so the history still
-            explains itself.
+            It stops counting towards the balance, but it stays on the statement so you can
+            still see what happened.
           </Text>
           <Textarea
-            label="Why is it being voided?"
+            label="Why are you cancelling it?"
             placeholder="Entered twice, wrong customer, typo in the amount…"
             withAsterisk
             autosize
@@ -125,23 +175,23 @@ export function LedgerCustomerPage() {
           />
         </Stack>
       ),
-      labels: { confirm: 'Void entry', cancel: 'Keep it' },
+      labels: { confirm: 'Cancel it', cancel: 'Keep it' },
       confirmProps: { color: 'red' },
       onConfirm: async () => {
         if (!reason.trim()) {
           notifications.show({
-            title: 'A reason is needed',
-            message: 'Say why the entry is being voided, then try again.',
+            title: 'Please give a reason',
+            message: 'Write why, then try again.',
             color: 'red',
           });
           return;
         }
         try {
           await voidEntry.mutateAsync({ id: entry.id, void_reason: reason.trim() });
-          notifications.show({ title: 'Entry voided', message: entry.description, color: 'gray' });
+          notifications.show({ title: 'Entry cancelled', message: entry.description, color: 'gray' });
         } catch (error) {
           notifications.show({
-            title: 'Could not void the entry',
+            title: 'Could not cancel the entry',
             message: error instanceof Error ? error.message : 'Unknown error',
             color: 'red',
           });
@@ -168,8 +218,8 @@ export function LedgerCustomerPage() {
           />
           {/* Said plainly, because it is the rule the whole ledger rests on. */}
           <Text fz="xs" c="dimmed">
-            The amount and direction cannot be edited. If those are wrong, void the entry and write
-            a new one.
+            The amount and the side cannot be changed. If one of those is wrong, cancel this
+            entry and add a new one.
           </Text>
         </Stack>
       ),
@@ -191,7 +241,12 @@ export function LedgerCustomerPage() {
   };
 
   return (
-    <Stack gap="lg">
+    <>
+      {statement.data?.statement && (
+        <AccountStatement customer={statement.data.customer} statement={statement.data.statement} />
+      )}
+
+      <Stack gap="lg" data-print="hide">
       <Anchor component={Link} to="/ledger" fz="sm" c="dimmed">
         <Group gap={6}>
           <IconArrowLeft size={15} /> Ledger
@@ -216,7 +271,8 @@ export function LedgerCustomerPage() {
 
           <div>
             <Text fz="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: '0.06em' }}>
-              {standing === 'ADVANCE' ? 'In credit' : 'Balance'}
+              {/* The side is on the badge beside the name; this is the figure. */}
+              Balance
             </Text>
             <Text
               fz={34}
@@ -227,17 +283,17 @@ export function LedgerCustomerPage() {
               {formatOMR(Math.abs(totals.balance_baisa))}
             </Text>
             <Text fz="xs" c="dimmed">
-              {formatOMR(totals.charged_baisa, { symbol: false })} charged ·{' '}
-              {formatOMR(totals.paid_baisa, { symbol: false })} paid
+              {formatOMR(totals.charged_baisa, { symbol: false })} debit ·{' '}
+              {formatOMR(totals.paid_baisa, { symbol: false })} credit
             </Text>
           </div>
 
           <Group gap="sm">
             <Button leftSection={<IconPlus size={16} />} color="red" variant="light" onClick={() => start('CHARGE')}>
-              Add charge
+              Add debit
             </Button>
             <Button leftSection={<IconMinus size={16} />} onClick={() => start('PAYMENT')}>
-              Record payment
+              Add credit
             </Button>
             <Tooltip label="Adjustment or opening balance">
               <ActionIcon size={36} variant="default" onClick={() => start('ADJUSTMENT')} aria-label="Other entry">
@@ -249,11 +305,47 @@ export function LedgerCustomerPage() {
       </Card>
 
       <Paper withBorder radius="lg" p={0}>
-        <Group p="md" justify="space-between">
-          <Text fw={650}>Statement</Text>
-          <Text fz="sm" c="dimmed">
-            {entries.data?.total ?? 0} {entries.data?.total === 1 ? 'entry' : 'entries'}
-          </Text>
+        <Group p="md" justify="space-between" align="flex-end" wrap="wrap" gap="md">
+          <div>
+            <Text fw={650}>Statement</Text>
+            <Text fz="sm" c="dimmed">
+              {entries.data?.total ?? 0} {entries.data?.total === 1 ? 'entry' : 'entries'} on this
+              account
+            </Text>
+          </div>
+
+          {/* The printed Account General Ledger covers these dates, which is why
+              they sit next to the button rather than filtering the list below. */}
+          <Group gap="sm" align="flex-end" wrap="wrap">
+            <DateInput
+              label="Print from"
+              placeholder="Beginning"
+              value={from}
+              onChange={(value) => setFrom(value as Date | null)}
+              valueFormat="DD MMM YYYY"
+              clearable
+              size="sm"
+              w={150}
+            />
+            <DateInput
+              label="Print to"
+              placeholder="Today"
+              value={to}
+              onChange={(value) => setTo(value as Date | null)}
+              valueFormat="DD MMM YYYY"
+              clearable
+              size="sm"
+              w={150}
+            />
+            <Button
+              variant="default"
+              leftSection={<IconPrinter size={16} />}
+              onClick={() => void printStatement()}
+              loading={statement.isFetching}
+            >
+              Print statement
+            </Button>
+          </Group>
         </Group>
 
         {entries.isLoading ? (
@@ -270,7 +362,7 @@ export function LedgerCustomerPage() {
                 Nothing on this account yet
               </Text>
               <Text c="dimmed" fz="sm">
-                Add a charge for work done, or record a payment they have already made.
+                Add a debit for what they have to pay, or a credit for money received.
               </Text>
               <Button mt="xs" leftSection={<IconPlus size={16} />} onClick={() => start('CHARGE')}>
                 Add the first entry
@@ -284,8 +376,8 @@ export function LedgerCustomerPage() {
                 <Table.Tr>
                   <Table.Th>Date</Table.Th>
                   <Table.Th>Details</Table.Th>
-                  <Table.Th ta="right">Charge</Table.Th>
-                  <Table.Th ta="right">Payment</Table.Th>
+                  <Table.Th ta="right">Debit</Table.Th>
+                  <Table.Th ta="right">Credit</Table.Th>
                   <Table.Th ta="right">Balance</Table.Th>
                   <Table.Th w={40} />
                 </Table.Tr>
@@ -313,7 +405,7 @@ export function LedgerCustomerPage() {
                           {voided && (
                             <Tooltip label={entry.void_reason ?? ''}>
                               <Badge size="xs" color="red" variant="light">
-                                Voided
+                                Cancelled
                               </Badge>
                             </Tooltip>
                           )}
@@ -366,7 +458,7 @@ export function LedgerCustomerPage() {
                                 leftSection={<IconBan size={15} />}
                                 onClick={() => confirmVoid(entry)}
                               >
-                                Void entry
+                                Cancel entry
                               </Menu.Item>
                             </Menu.Dropdown>
                           </Menu>
@@ -407,11 +499,11 @@ export function LedgerCustomerPage() {
                   <Group justify="space-between" mt="xs">
                     {voided ? (
                       <Badge size="xs" color="red" variant="light">
-                        Voided
+                        Cancelled
                       </Badge>
                     ) : (
                       <Button size="compact-xs" variant="subtle" color="red" onClick={() => confirmVoid(entry)}>
-                        Void
+                        Cancel
                       </Button>
                     )}
                     <Text fz="xs" c="dimmed">
@@ -446,6 +538,7 @@ export function LedgerCustomerPage() {
         balanceBaisa={totals.balance_baisa}
         intent={intent}
       />
-    </Stack>
+      </Stack>
+    </>
   );
 }

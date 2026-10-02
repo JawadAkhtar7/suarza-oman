@@ -1,11 +1,14 @@
 /**
- * One sale or purchase, as the document it is.
+ * One sale, purchase or sales return, as the document it is.
  *
  * Laid out like the piece of paper it replaces, because that is what somebody
- * is holding when they open this screen to check it.
+ * is holding when they open this screen to check it. The paper version itself
+ * is rendered alongside and only appears when the browser prints - see
+ * PrintableDocument.
  */
 
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   Alert,
   Anchor,
@@ -27,9 +30,8 @@ import {
 import { useMediaQuery } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconBan, IconReceipt2 } from '@tabler/icons-react';
+import { IconArrowLeft, IconBan, IconPrinter, IconReceipt2 } from '@tabler/icons-react';
 import {
-  SETTLEMENT_LABELS,
   formatDate,
   formatDateTime,
   formatOMR,
@@ -37,6 +39,8 @@ import {
   type DocumentKind,
 } from '@suarza-oman/shared';
 import { useDocument, useVoidDocument } from '../lib/documents.js';
+import { DOCUMENT_UI } from '../components/documents/kind.js';
+import { PrintableDocument } from '../components/documents/printable-document.js';
 
 export interface DocumentPageProps {
   kind: DocumentKind;
@@ -44,12 +48,29 @@ export interface DocumentPageProps {
 
 export function DocumentPage({ kind }: DocumentPageProps) {
   const { documentId = '' } = useParams();
-  const isSale = kind === 'SALE';
-  const base = isSale ? '/sales' : '/purchases';
+  const location = useLocation();
+  const ui = DOCUMENT_UI[kind];
   const isWide = useMediaQuery('(min-width: 48em)', true);
 
   const query = useDocument(documentId);
   const voidDocument = useVoidDocument();
+
+  /* "Save and print" lands here and prints once. Guarded by a ref because the
+     dialog must not reopen when the query refetches or the tab regains focus -
+     an invoice that prints itself twice wastes the paper and the operator's
+     afternoon. */
+  const printRequested = (location.state as { print?: boolean } | null)?.print === true;
+  const printed = useRef(false);
+  const ready = query.isSuccess;
+  useEffect(() => {
+    if (!printRequested || !ready || printed.current) return;
+    printed.current = true;
+    /* Forget the request, so reloading this page does not print it again. */
+    window.history.replaceState({}, '');
+    /* A moment, so the sheet is in the DOM before the dialog is raised. */
+    const timer = window.setTimeout(() => window.print(), 100);
+    return () => window.clearTimeout(timer);
+  }, [printRequested, ready]);
 
   if (query.isLoading) {
     return (
@@ -62,9 +83,9 @@ export function DocumentPage({ kind }: DocumentPageProps) {
   if (query.isError || !query.data) {
     return (
       <Stack gap="md">
-        <Anchor component={Link} to={base} fz="sm">
+        <Anchor component={Link} to={ui.base} fz="sm">
           <Group gap={6}>
-            <IconArrowLeft size={15} /> {isSale ? 'Sales' : 'Purchases'}
+            <IconArrowLeft size={15} /> {ui.listTitle}
           </Group>
         </Anchor>
         <Alert color="red" title="Could not open this document">
@@ -76,20 +97,25 @@ export function DocumentPage({ kind }: DocumentPageProps) {
 
   const document = query.data;
   const voided = document.status === 'VOID';
+  /* Every kind is numbered 1, 2, 3 on its own run, so the number alone does not
+     say what you are looking at. The noun carries that: "Invoice 7",
+     "Purchase return 1". */
+  const title = `${ui.noun} ${document.number}`;
+  const settlementLabel = ui.settlementLabels[document.settlement];
 
   const confirmVoid = () => {
     let reason = '';
     modals.openConfirmModal({
-      title: `Void ${document.number}?`,
+      title: `Cancel ${title}?`,
       centered: true,
       children: (
         <Stack gap="sm">
           <Text size="sm">
-            The stock it moved goes back, and the entry on {document.party_name}’s account stops
-            counting. Both stay on record.
+            The stock goes back, and the amount on {document.party_name}’s account stops
+            counting. Both stay on record, so nothing is lost.
           </Text>
           <Textarea
-            label="Why is it being voided?"
+            label="Why are you cancelling it?"
             placeholder="Entered twice, wrong customer, goods returned…"
             withAsterisk
             autosize
@@ -100,23 +126,23 @@ export function DocumentPage({ kind }: DocumentPageProps) {
           />
         </Stack>
       ),
-      labels: { confirm: 'Void document', cancel: 'Keep it' },
+      labels: { confirm: 'Cancel it', cancel: 'Keep it' },
       confirmProps: { color: 'red' },
       onConfirm: async () => {
         if (!reason.trim()) {
           notifications.show({
-            title: 'A reason is needed',
-            message: 'Say why it is being voided, then try again.',
+            title: 'Please give a reason',
+            message: 'Write why, then try again.',
             color: 'red',
           });
           return;
         }
         try {
           await voidDocument.mutateAsync({ id: document.id, void_reason: reason.trim() });
-          notifications.show({ title: 'Document voided', message: document.number, color: 'gray' });
+          notifications.show({ title: 'Cancelled', message: title, color: 'gray' });
         } catch (error) {
           notifications.show({
-            title: 'Could not void',
+            title: 'Could not cancel it',
             message: error instanceof Error ? error.message : 'Unknown error',
             color: 'red',
           });
@@ -126,15 +152,18 @@ export function DocumentPage({ kind }: DocumentPageProps) {
   };
 
   return (
-    <Stack gap="lg">
-      <Anchor component={Link} to={base} fz="sm" c="dimmed">
+    <>
+      <PrintableDocument document={document} />
+
+      <Stack gap="lg" data-print="hide">
+      <Anchor component={Link} to={ui.base} fz="sm" c="dimmed">
         <Group gap={6}>
-          <IconArrowLeft size={15} /> {isSale ? 'Sales' : 'Purchases'}
+          <IconArrowLeft size={15} /> {ui.listTitle}
         </Group>
       </Anchor>
 
       {voided && (
-        <Alert color="red" variant="light" title="This document is void" icon={<IconBan size={18} />}>
+        <Alert color="red" variant="light" title="This one was cancelled" icon={<IconBan size={18} />}>
           {document.void_reason}
           {document.voided_at && ` · ${formatDateTime(document.voided_at)}`}
         </Alert>
@@ -145,28 +174,46 @@ export function DocumentPage({ kind }: DocumentPageProps) {
           <div>
             <Group gap="sm">
               <Title order={1} fz={24} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {document.number}
+                {title}
               </Title>
               <Badge variant="light" color={document.settlement === 'PAID' ? 'brand' : 'orange'}>
-                {SETTLEMENT_LABELS[document.settlement]}
+                {settlementLabel}
               </Badge>
             </Group>
             <Text c="dimmed" fz="sm" mt={4}>
-              {isSale ? 'Sold to' : 'Bought from'}{' '}
+              {ui.partyPreposition}{' '}
               <Anchor component={Link} to={`/ledger/${document.party_id}`} fz="sm">
                 {document.party_name}
               </Anchor>
               {' · '}
               {formatDate(document.document_date)}
-              {document.reference ? ` · ${document.reference}` : ''}
+              {document.reference ? ` · Ref ${document.reference}` : ''}
+              {document.against_invoice_number
+                ? ` · Against invoice ${document.against_invoice_number}`
+                : ''}
+              {document.salesman_name ? ` · Sold by ${document.salesman_name}` : ''}
             </Text>
           </div>
 
-          {!voided && (
-            <Button variant="light" color="red" leftSection={<IconBan size={16} />} onClick={confirmVoid}>
-              Void
+          <Group gap="sm">
+            <Button
+              variant="default"
+              leftSection={<IconPrinter size={16} />}
+              onClick={() => window.print()}
+            >
+              Print
             </Button>
-          )}
+            {!voided && (
+              <Button
+                variant="light"
+                color="red"
+                leftSection={<IconBan size={16} />}
+                onClick={confirmVoid}
+              >
+                Cancel it
+              </Button>
+            )}
+          </Group>
         </Group>
       </Card>
 
@@ -263,9 +310,19 @@ export function DocumentPage({ kind }: DocumentPageProps) {
                 {formatOMR(document.vat_baisa)}
               </Text>
             </Group>
+            {document.discount_baisa > 0 && (
+              <Group justify="space-between">
+                <Text fz="sm" c="dimmed">
+                  Discount
+                </Text>
+                <Text fz="sm" c="red" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  −{formatOMR(document.discount_baisa)}
+                </Text>
+              </Group>
+            )}
             <Divider my={4} />
             <Group justify="space-between">
-              <Text fw={650}>Total</Text>
+              <Text fw={650}>{ui.totalLabel}</Text>
               <Text fw={700} fz="lg" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatOMR(document.total_baisa)}
               </Text>
@@ -293,19 +350,16 @@ export function DocumentPage({ kind }: DocumentPageProps) {
                 What this did
               </Text>
               <Text fz="sm" c="dimmed" mt={4}>
-                {voided
-                  ? 'The stock has been put back and the ledger entry no longer counts.'
-                  : isSale
-                    ? 'Stock went out, and the total was charged to the customer’s account.'
-                    : 'Stock came in, and the total was credited to the supplier’s account.'}
+                {voided ? ui.voidedEffect : ui.effect}
               </Text>
               <Anchor component={Link} to={`/ledger/${document.party_id}`} fz="sm" mt={6} display="block">
-                Open {document.party_name}’s ledger →
+                Open {document.party_name}’s account →
               </Anchor>
             </div>
           </Group>
         </Card>
       </SimpleGrid>
-    </Stack>
+      </Stack>
+    </>
   );
 }

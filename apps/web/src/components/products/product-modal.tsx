@@ -202,7 +202,7 @@ export function ProductModal({ opened, onClose, product }: ProductModalProps) {
             <TextInput
               label="Code"
               placeholder="CEM50"
-              description="Optional, but no two products can share one"
+              description="Optional. No two products can have the same code."
               {...form.getInputProps('code')}
             />
             <Autocomplete
@@ -273,8 +273,8 @@ export function ProductModal({ opened, onClose, product }: ProductModalProps) {
           <Divider label="Stock" labelPosition="left" />
 
           <Checkbox
-            label="Keep track of how many are in stock"
-            description="Turn this off for services and charges — delivery, labour, a fee."
+            label="Count how many are in stock"
+            description="Turn this off for things you do not store, like delivery or labour."
             {...form.getInputProps('track_stock', { type: 'checkbox' })}
             onChange={(event) => {
               form.getInputProps('track_stock', { type: 'checkbox' }).onChange(event);
@@ -292,7 +292,7 @@ export function ProductModal({ opened, onClose, product }: ProductModalProps) {
                   min={0}
                   decimalScale={3}
                   thousandSeparator=","
-                  description="Recorded as the first stock movement"
+                  description="Saved as the first stock entry"
                   {...form.getInputProps('opening_stock')}
                 />
               )}

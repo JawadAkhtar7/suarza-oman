@@ -203,7 +203,7 @@ export function ProductsPage() {
         <Tile
           label="Stock value"
           value={formatOMR(summary.data?.stock_value_baisa ?? 0)}
-          hint="Everything on hand, at cost"
+          hint="Everything you have, at cost price"
           icon={<IconCoins size={21} stroke={1.7} />}
           color="gray"
           loading={summary.isLoading}
@@ -211,7 +211,7 @@ export function ProductsPage() {
         <Tile
           label="Running low"
           value={String(summary.data?.low_stock ?? 0)}
-          hint="At or below their warning level"
+          hint="At or below the warning level"
           icon={<IconAlertTriangle size={21} stroke={1.7} />}
           color="orange"
           loading={summary.isLoading}
@@ -299,7 +299,7 @@ export function ProductsPage() {
               <Text c="dimmed" fz="sm">
                 {isFiltered
                   ? 'Try a shorter search, or clear the filters.'
-                  : 'Define the first one and it will be available to every sale, purchase and invoice.'}
+                  : 'Add the first one, and you can use it on every sale and purchase.'}
               </Text>
               {!isFiltered && (
                 <Button mt="xs" leftSection={<IconBox size={17} />} onClick={startCreate}>

@@ -17,11 +17,12 @@
  */
 
 import { NavLink, useMatch } from 'react-router-dom';
-import { Avatar, Menu, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Avatar, Menu, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { spotlight } from '@mantine/spotlight';
 import {
   IconChevronRight,
   IconLogout,
+  IconX,
   IconMoon,
   IconSearch,
   IconSun,
@@ -38,6 +39,12 @@ export interface SidebarProps {
   counts: Partial<Record<'customers' | 'vendors' | 'products' | 'employees', number>>;
   /** Closes the mobile drawer after a jump; absent on desktop. */
   onNavigate?: () => void;
+  /**
+   * Closes the drawer outright. Shown as a cross next to the logo, and only
+   * on the widths where the sidebar is a drawer — on desktop it is furniture
+   * and there is nothing to dismiss.
+   */
+  onClose?: () => void;
 }
 
 function NavRow({ item, collapsed, count, onNavigate }: {
@@ -102,13 +109,26 @@ function NavRow({ item, collapsed, count, onNavigate }: {
   );
 }
 
-export function Sidebar({ collapsed, counts, onNavigate }: SidebarProps) {
+export function Sidebar({ collapsed, counts, onNavigate, onClose }: SidebarProps) {
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const dark = colorScheme === 'dark';
 
   return (
     <div className={`${classes.navbar} ${collapsed ? classes.collapsed : ''}`}>
       <div className={classes.brand}>
+        {onClose && (
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            className={classes.close}
+            onClick={onClose}
+            aria-label="Close the menu"
+            hiddenFrom="md"
+          >
+            <IconX size={20} stroke={2} />
+          </ActionIcon>
+        )}
         {collapsed ? (
           <div className={classes.mark}>S</div>
         ) : (
@@ -127,7 +147,7 @@ export function Sidebar({ collapsed, counts, onNavigate }: SidebarProps) {
         className={classes.search}
         onClick={spotlight.open}
         style={collapsed ? { justifyContent: 'center' } : undefined}
-        aria-label="Search the system"
+        aria-label="Search"
       >
         <IconSearch size={15} stroke={1.8} />
         {!collapsed && (

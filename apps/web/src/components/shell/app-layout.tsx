@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react';
-import { AppShell, Burger, Group, Text, Tooltip, ActionIcon, Kbd, Box } from '@mantine/core';
+import { AppShell, Burger, Group, Overlay, Text, Tooltip, ActionIcon, Kbd, Box } from '@mantine/core';
 import { useDisclosure, useHeadroom, useMediaQuery } from '@mantine/hooks';
 import { spotlight } from '@mantine/spotlight';
 import { IconBell, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconSearch } from '@tabler/icons-react';
@@ -16,6 +16,7 @@ import type { CustomerPage } from '@suarza-oman/shared';
 import { Sidebar } from './sidebar.js';
 import { CommandPalette } from './command-palette.js';
 import { ALL_ITEMS } from './nav.js';
+import { useSwipeToClose } from './use-swipe-to-close.js';
 import { api } from '../../lib/api.js';
 
 const EXPANDED = 250;
@@ -26,6 +27,11 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 62em)');
   const location = useLocation();
+
+  /* The drawer is only a drawer below `md`; above it the sidebar is furniture
+     and there is nothing to dismiss. */
+  const isDrawer = useMediaQuery('(max-width: 62em)') ?? false;
+  const swipe = useSwipeToClose(closeMobile, isDrawer && mobileOpen);
 
   /* The badge in the menu. Cheap — the list endpoint returns a total, so one
      row is enough to know how many there are. */
@@ -53,9 +59,12 @@ export function AppLayout() {
     select: (page) => page.total,
   });
 
-  const current = ALL_ITEMS.find((item) =>
-    item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to),
-  );
+  /* Matched on whole path segments, not as a string prefix: "/sales-returns"
+     begins with "/sales" and would otherwise be labelled "Sales". */
+  const current = ALL_ITEMS.find((item) => {
+    if (item.to === '/') return location.pathname === '/';
+    return location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+  });
 
   return (
     <AppShell
@@ -68,7 +77,13 @@ export function AppLayout() {
       }}
       padding={{ base: 'md', sm: 'lg' }}
     >
-      <AppShell.Navbar withBorder={false} p={0}>
+      {/*
+        Three ways out of the open drawer, because one was not enough: the cross
+        in its corner, a tap on the page behind it, and a right-to-left swipe.
+        Until now it closed only when a menu item was picked, which left anyone
+        who opened it by mistake with nowhere to go.
+      */}
+      <AppShell.Navbar withBorder={false} p={0} {...swipe}>
         <Sidebar
           collapsed={collapsed && !!isDesktop}
           counts={{
@@ -78,8 +93,24 @@ export function AppLayout() {
             employees: employeeCount.data,
           }}
           onNavigate={closeMobile}
+          onClose={closeMobile}
         />
       </AppShell.Navbar>
+
+      {mobileOpen && isDrawer && (
+        /* Below the navbar and the header, so the drawer stays lit and the
+           burger stays tappable, and above everything else. */
+        <Overlay
+          /* Fixed, not absolute: AppShell's root is not a positioned ancestor,
+             so an absolute overlay would scroll away with the page. */
+          fixed
+          color="#000"
+          backgroundOpacity={0.45}
+          zIndex={199}
+          onClick={closeMobile}
+          {...swipe}
+        />
+      )}
 
       <AppShell.Header withBorder>
         <Group h="100%" px="md" gap="sm" wrap="nowrap">

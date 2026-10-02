@@ -6,7 +6,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import type { CustomerPage, ProductPage } from '@suarza-oman/shared';
+import type { CustomerPage, EmployeePage, ProductPage } from '@suarza-oman/shared';
 import { api } from '../../lib/api.js';
 
 export function usePartyOptions(vendorsOnly: boolean) {
@@ -28,5 +28,24 @@ export function useProductOptions() {
   return useQuery({
     queryKey: ['products', 'options'],
     queryFn: () => api.get<ProductPage>('/api/products?page_size=100&status=ACTIVE'),
+  });
+}
+
+/**
+ * Who can be named as the salesman on an invoice.
+ *
+ * Drawn from the staff list, because that is the only list of people the
+ * system has. There is no salesman master data yet, so an invoice with nobody
+ * named on it is normal and the form says so rather than insisting.
+ */
+export function useSalesmanOptions() {
+  return useQuery({
+    queryKey: ['employees', 'options'],
+    queryFn: () => api.get<EmployeePage>('/api/employees?page_size=100&status=ACTIVE&sort=name'),
+    select: (page) =>
+      page.rows.map((employee) => ({
+        value: employee.id,
+        label: employee.designation ? `${employee.name} — ${employee.designation}` : employee.name,
+      })),
   });
 }

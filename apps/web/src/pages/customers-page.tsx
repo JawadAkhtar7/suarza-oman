@@ -154,7 +154,7 @@ export function CustomersPage({ vendorsOnly = false }: CustomersPageProps = {}) 
         <Text c="dimmed" fz="sm" mt={4}>
           {vendorsOnly
             ? 'Customers you also buy from. Tick “List in the Vendor list” on a customer to add them here.'
-            : 'Everyone you sell to. Sales, invoices and ledgers all point back here.'}
+            : 'Everyone you sell to. Every sale, invoice and account links back here.'}
         </Text>
       </div>
       <Button leftSection={<IconPlus size={17} />} onClick={startCreate} size="md">
@@ -297,8 +297,8 @@ function EmptyState({ filtered, vendorsOnly, onCreate, onClear }: {
           {filtered
             ? 'Try a shorter search, or clear the filters to see everyone.'
             : vendorsOnly
-              ? 'Tick “List this customer in the Vendor list” on any customer, and they appear here as well.'
-              : 'Add the first one and it will be available to every sale, invoice and ledger in the system.'}
+              ? 'Tick “List this customer in the Vendor list” on any customer, and they show up here too.'
+              : 'Add the first one, and you can use them on every sale and invoice.'}
         </Text>
         {filtered ? (
           <Button variant="light" onClick={onClear} mt="xs">

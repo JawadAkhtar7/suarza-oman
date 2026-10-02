@@ -31,8 +31,12 @@ export const LEDGER_KINDS = [
   'PAYMENT',
   /** A supplier's bill: we owe them. */
   'BILL',
-  /** Money paid out to a supplier. */
+  /** Money paid out to a supplier, or refunded to a customer. */
   'PAYMENT_MADE',
+  /** Goods came back: the customer owes us less than the invoice said. */
+  'CREDIT_NOTE',
+  /** Goods sent back to a supplier: we owe them less than their bill said. */
+  'DEBIT_NOTE',
   'ADJUSTMENT',
 ] as const;
 export const ledgerKindSchema = z.enum(LEDGER_KINDS);
@@ -40,10 +44,15 @@ export type LedgerKind = z.infer<typeof ledgerKindSchema>;
 
 export const LEDGER_KIND_LABELS: Record<LedgerKind, string> = {
   OPENING: 'Opening balance',
-  CHARGE: 'Charge',
-  PAYMENT: 'Payment',
+  /* The client's books call these what the accounting calls them. "Charge" and
+     "Payment" read more plainly but stop being true the moment the account
+     belongs to a vendor, where a charge is money we owe. */
+  CHARGE: 'Debit',
+  PAYMENT: 'Credit',
   BILL: 'Supplier bill',
   PAYMENT_MADE: 'Paid out',
+  CREDIT_NOTE: 'Sales return',
+  DEBIT_NOTE: 'Purchase return',
   ADJUSTMENT: 'Adjustment',
 };
 
@@ -57,6 +66,8 @@ export const KIND_DIRECTION: Record<LedgerKind, LedgerDirection | null> = {
      money we owe them. Same arithmetic, read from the other side. */
   BILL: 'CREDIT',
   PAYMENT_MADE: 'DEBIT',
+  CREDIT_NOTE: 'CREDIT',
+  DEBIT_NOTE: 'DEBIT',
   ADJUSTMENT: null,
 };
 
@@ -186,6 +197,41 @@ export interface LedgerEntryPage {
   total: number;
   page: number;
   page_size: number;
+}
+
+/**
+ * A statement of account, for a date range, in the order it is read on paper.
+ *
+ * Separate from the paged entry list because it answers a different question.
+ * The list is "what has happened on this account lately", newest first, a page
+ * at a time. A statement is a closed thing you hand to somebody: it opens with
+ * what they owed before the period, runs oldest to newest so the balance column
+ * accumulates the way the eye expects, and closes with what they owe now.
+ */
+export const ledgerStatementQuerySchema = z.object({
+  /** Blank means "from the beginning", and then the opening balance is zero. */
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  /* A guard, not a page: a statement is printed whole. Beyond this the printed
+     document would say so rather than quietly stopping short. */
+  limit: z.coerce.number().int().min(1).max(5000).default(2000),
+});
+export type LedgerStatementQuery = z.infer<typeof ledgerStatementQuerySchema>;
+
+export interface LedgerStatement {
+  from: string | null;
+  to: string | null;
+  /** Where the account stood the moment before `from`. Zero when open-ended. */
+  opening_balance_baisa: number;
+  /** Oldest first. The running balance includes the opening balance. */
+  rows: LedgerEntry[];
+  debit_total_baisa: number;
+  credit_total_baisa: number;
+  closing_balance_baisa: number;
+  /** True when there were more entries in range than `limit` would return. */
+  truncated: boolean;
+  /** When it was drawn up, which is printed on it. */
+  generated_at: string;
 }
 
 /** Where an account stands, in the one word the UI puts on a badge. */

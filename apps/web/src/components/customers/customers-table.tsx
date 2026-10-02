@@ -104,7 +104,7 @@ function RowMenu({ customer, onEdit, onDelete }: {
           to={`/ledger/${customer.id}`}
           leftSection={<IconReceipt2 size={15} />}
         >
-          Open ledger
+          Open account
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item

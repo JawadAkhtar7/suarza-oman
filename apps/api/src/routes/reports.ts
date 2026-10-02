@@ -14,6 +14,7 @@ import { TradeDocumentModel } from '../models/trade-document.model.js';
 import { ProductModel } from '../models/product.model.js';
 import { SIGNED_QUANTITY } from '../models/stock-movement.model.js';
 import { CustomerModel } from '../models/customer.model.js';
+import type { DocumentKind } from '@suarza-oman/shared';
 
 export const reportsRouter: Router = Router();
 
@@ -23,17 +24,46 @@ const rangeSchema = z.object({
 });
 
 /** Posted documents of one kind, inside the range. Voided ones are not business. */
-const inRange = (kind: 'SALE' | 'PURCHASE', from: Date, to: Date) => ({
+const inRange = (kind: DocumentKind, from: Date, to: Date) => ({
   kind,
   status: 'POSTED',
   document_date: { $gte: from, $lte: to },
 });
 
+/**
+ * Plus for what was sold or bought, minus for what came back.
+ *
+ * Every figure on this report is netted this way. A month that sold 40,000 and
+ * took 9,000 of it back did 31,000 of business, and a dashboard that says
+ * 40,000 is the kind of number somebody plans a purchase order around.
+ */
+const RETURN_KINDS: Record<string, DocumentKind> = {
+  SALE: 'SALE_RETURN',
+  PURCHASE: 'PURCHASE_RETURN',
+};
+
+const signedBy = (positiveKind: DocumentKind, field: string) => ({
+  $cond: [{ $eq: ['$kind', positiveKind] }, field, { $multiply: [field, -1] }],
+});
+
+export interface DocumentTotals {
+  count: number;
+  net_baisa: number;
+  vat_baisa: number;
+  total_baisa: number;
+}
+
 export interface ReportsOverview {
   from: string;
   to: string;
-  sales: { count: number; net_baisa: number; vat_baisa: number; total_baisa: number };
-  purchases: { count: number; net_baisa: number; vat_baisa: number; total_baisa: number };
+  /** Gross, before anything came back. */
+  sales: DocumentTotals;
+  purchases: DocumentTotals;
+  sale_returns: DocumentTotals;
+  purchase_returns: DocumentTotals;
+  /** Gross less returns — the figures to plan on. */
+  net_sales_baisa: number;
+  net_purchases_baisa: number;
   /** Sales net less what those goods cost, at today's cost price. */
   margin_baisa: number;
   receivable_baisa: number;
@@ -46,7 +76,7 @@ export interface ReportsOverview {
   stock_by_category: { category: string; value_baisa: number }[];
 }
 
-async function documentTotals(kind: 'SALE' | 'PURCHASE', from: Date, to: Date) {
+async function documentTotals(kind: DocumentKind, from: Date, to: Date): Promise<DocumentTotals> {
   const [totals] = await TradeDocumentModel.aggregate([
     { $match: inRange(kind, from, to) },
     {
@@ -91,9 +121,11 @@ reportsRouter.get(
       to: req.query['to'] ?? new Date(),
     });
 
-    const [sales, purchases] = await Promise.all([
+    const [sales, purchases, saleReturns, purchaseReturns] = await Promise.all([
       documentTotals('SALE', from, to),
       documentTotals('PURCHASE', from, to),
+      documentTotals(RETURN_KINDS['SALE']!, from, to),
+      documentTotals(RETURN_KINDS['PURCHASE']!, from, to),
     ]);
 
     /* --- Daily series ---------------------------------------------------- */
@@ -113,21 +145,34 @@ reportsRouter.get(
     for (const row of daily) {
       const point = series.get(row._id.day);
       if (!point) continue;
-      if (row._id.kind === 'SALE') point.sales = row.total;
-      else point.purchases = row.total;
+      /* The line is what the business actually did that day, so a return comes
+         straight off the day it was taken back on. */
+      if (row._id.kind === 'SALE') point.sales += row.total;
+      else if (row._id.kind === 'SALE_RETURN') point.sales -= row.total;
+      else if (row._id.kind === 'PURCHASE') point.purchases += row.total;
+      else if (row._id.kind === 'PURCHASE_RETURN') point.purchases -= row.total;
     }
 
     /* --- What sold, and what it cost -------------------------------------- */
     const soldLines = await TradeDocumentModel.aggregate([
-      { $match: inRange('SALE', from, to) },
+      {
+        $match: {
+          kind: { $in: ['SALE', 'SALE_RETURN'] },
+          status: 'POSTED',
+          document_date: { $gte: from, $lte: to },
+        },
+      },
       { $unwind: '$lines' },
       {
         $group: {
           _id: { product: '$lines.product_id', name: '$lines.description' },
-          quantity_milli: { $sum: '$lines.quantity_milli' },
-          revenue_baisa: { $sum: '$lines.net_baisa' },
+          quantity_milli: { $sum: signedBy('SALE', '$lines.quantity_milli') },
+          revenue_baisa: { $sum: signedBy('SALE', '$lines.net_baisa') },
         },
       },
+      /* A product that was entirely returned nets to nothing and belongs on no
+         "top products" list. */
+      { $match: { revenue_baisa: { $gt: 0 } } },
       { $sort: { revenue_baisa: -1 } },
     ]);
 
@@ -146,14 +191,22 @@ reportsRouter.get(
 
     /* --- Who bought --------------------------------------------------------*/
     const topCustomers = await TradeDocumentModel.aggregate([
-      { $match: inRange('SALE', from, to) },
+      {
+        $match: {
+          kind: { $in: ['SALE', 'SALE_RETURN'] },
+          status: 'POSTED',
+          document_date: { $gte: from, $lte: to },
+        },
+      },
       {
         $group: {
           _id: '$party_name',
-          count: { $sum: 1 },
-          revenue_baisa: { $sum: '$net_baisa' },
+          /* Invoices only: "4 invoices, two of them returned" is not 6. */
+          count: { $sum: { $cond: [{ $eq: ['$kind', 'SALE'] }, 1, 0] } },
+          revenue_baisa: { $sum: signedBy('SALE', '$net_baisa') },
         },
       },
+      { $match: { revenue_baisa: { $gt: 0 } } },
       { $sort: { revenue_baisa: -1 } },
       { $limit: 6 },
     ]);
@@ -228,6 +281,10 @@ reportsRouter.get(
       to: to.toISOString(),
       sales,
       purchases,
+      sale_returns: saleReturns,
+      purchase_returns: purchaseReturns,
+      net_sales_baisa: sales.total_baisa - saleReturns.total_baisa,
+      net_purchases_baisa: purchases.total_baisa - purchaseReturns.total_baisa,
       margin_baisa: margin,
       receivable_baisa: balances?.receivable ?? 0,
       payable_baisa: balances?.payable ?? 0,

@@ -1,5 +1,8 @@
 /**
- * Sales, or purchases — the same screen read from either end.
+ * Sales invoices, purchases or sales returns — one screen, told which it is.
+ *
+ * The three are the same table of the same documents; only the wording differs,
+ * and that lives in DOCUMENT_UI rather than in ternaries down this file.
  */
 
 import { useEffect, useState } from 'react';
@@ -36,13 +39,13 @@ import {
   IconX,
 } from '@tabler/icons-react';
 import {
-  SETTLEMENT_LABELS,
   formatDate,
   formatOMR,
   type DocumentKind,
   type TradeDocument,
 } from '@suarza-oman/shared';
 import { useDocumentSummary, useDocuments, type DocumentListParams } from '../lib/documents.js';
+import { DOCUMENT_UI } from '../components/documents/kind.js';
 
 const PAGE_SIZE = 25;
 
@@ -99,8 +102,12 @@ export interface DocumentsPageProps {
 
 export function DocumentsPage({ kind }: DocumentsPageProps) {
   const navigate = useNavigate();
-  const isSale = kind === 'SALE';
-  const base = isSale ? '/sales' : '/purchases';
+  const ui = DOCUMENT_UI[kind];
+  const base = ui.base;
+  const settlementLabels = ui.settlementLabels;
+  /* The only thing left that varies by hand is the icon: a trolley for the two
+     sales screens, an invoice for the two purchase ones. */
+  const isSale = kind === 'SALE' || kind === 'SALE_RETURN';
 
   const [search, setSearch] = useState('');
   const [debounced] = useDebouncedValue(search, 300);
@@ -131,7 +138,7 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
         <div>
           <Group gap="sm">
             <Title order={1} fz={26}>
-              {isSale ? 'Sales' : 'Purchases'}
+              {ui.listTitle}
             </Title>
             {total > 0 && (
               <Badge variant="light" color="gray" size="lg">
@@ -140,9 +147,7 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
             )}
           </Group>
           <Text c="dimmed" fz="sm" mt={4}>
-            {isSale
-              ? 'What went out, to whom, and whether it has been paid for.'
-              : 'What came in, from whom, and whether it has been settled.'}
+            {ui.listBlurb}
           </Text>
         </div>
         <Button
@@ -151,15 +156,15 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
           to={`${base}/new`}
           size="md"
         >
-          {isSale ? 'New sale' : 'New purchase'}
+          {ui.newLabel}
         </Button>
       </Group>
 
       <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
         <Tile
-          label={isSale ? 'Sales value' : 'Purchase value'}
+          label={ui.valueTileLabel}
           value={formatOMR(summary.data?.total_baisa ?? 0)}
-          hint={`${summary.data?.count ?? 0} posted ${summary.data?.count === 1 ? 'document' : 'documents'}`}
+          hint={`${summary.data?.count ?? 0} saved ${summary.data?.count === 1 ? 'document' : 'documents'}`}
           icon={isSale ? <IconShoppingCart size={21} stroke={1.7} /> : <IconFileInvoice size={21} stroke={1.7} />}
           color="gray"
           loading={summary.isLoading}
@@ -167,15 +172,15 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
         <Tile
           label="VAT"
           value={formatOMR(summary.data?.vat_baisa ?? 0)}
-          hint={isSale ? 'Collected on these sales' : 'Paid on these purchases'}
+          hint={ui.vatTileHint}
           icon={<IconReceipt2 size={21} stroke={1.7} />}
           color="gray"
           loading={summary.isLoading}
         />
         <Tile
-          label="On account"
+          label="Not yet paid"
           value={formatOMR(summary.data?.on_account_baisa ?? 0)}
-          hint={isSale ? 'Not yet paid by customers' : 'Not yet paid to suppliers'}
+          hint={ui.onAccountTileHint}
           icon={<IconReceipt2 size={21} stroke={1.7} />}
           color={isSale ? 'red' : 'orange'}
           loading={summary.isLoading}
@@ -205,8 +210,8 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
               onChange={(value) => setSettlement(value as DocumentListParams['settlement'])}
               data={[
                 { label: 'All', value: 'ALL' },
-                { label: 'Paid', value: 'PAID' },
-                { label: 'On account', value: 'ON_ACCOUNT' },
+                { label: settlementLabels.PAID, value: 'PAID' },
+                { label: settlementLabels.ON_ACCOUNT, value: 'ON_ACCOUNT' },
               ]}
               size="md"
             />
@@ -242,17 +247,13 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
               <Text fw={650} fz="lg">
                 {debounced || settlement !== 'ALL'
                   ? 'Nothing matches that'
-                  : isSale
-                    ? 'No sales yet'
-                    : 'No purchases yet'}
+                  : ui.emptyTitle}
               </Text>
               <Text c="dimmed" fz="sm">
-                {isSale
-                  ? 'Recording a sale takes the stock out and charges the customer’s account.'
-                  : 'Recording a purchase brings the stock in and credits the supplier’s account.'}
+                {ui.emptyBlurb}
               </Text>
               <Button mt="xs" component={Link} to={`${base}/new`} leftSection={<IconPlus size={16} />}>
-                {isSale ? 'Record a sale' : 'Record a purchase'}
+                {ui.emptyAction}
               </Button>
             </Stack>
           </Center>
@@ -261,13 +262,13 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
             <Table verticalSpacing="sm" horizontalSpacing="lg">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Number</Table.Th>
-                  <Table.Th>{isSale ? 'Customer' : 'Supplier'}</Table.Th>
+                  <Table.Th>{ui.numberColumn}</Table.Th>
+                  <Table.Th>{ui.partyLabel}</Table.Th>
                   <Table.Th>Date</Table.Th>
                   <Table.Th ta="right">Net</Table.Th>
                   <Table.Th ta="right">VAT</Table.Th>
                   <Table.Th ta="right">Total</Table.Th>
-                  <Table.Th>Settlement</Table.Th>
+                  <Table.Th>{ui.settlementColumn}</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -284,13 +285,22 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
                         </Text>
                         {document.status === 'VOID' && (
                           <Badge size="xs" color="red" variant="light">
-                            Void
+                            Cancelled
                           </Badge>
                         )}
                       </Group>
-                      {document.reference && (
+                      {(document.reference ||
+                        document.against_invoice_number ||
+                        document.salesman_name) && (
                         <Text fz="xs" c="dimmed">
-                          {document.reference}
+                          {[
+                            document.reference,
+                            document.against_invoice_number &&
+                              `against ${document.against_invoice_number}`,
+                            document.salesman_name,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </Text>
                       )}
                     </Table.Td>
@@ -323,7 +333,7 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
                         variant="light"
                         color={document.settlement === 'PAID' ? 'brand' : 'orange'}
                       >
-                        {SETTLEMENT_LABELS[document.settlement]}
+                        {settlementLabels[document.settlement]}
                       </Badge>
                     </Table.Td>
                   </Table.Tr>
@@ -351,7 +361,7 @@ export function DocumentsPage({ kind }: DocumentsPageProps) {
                   </Group>
                   <Group justify="space-between" mt="sm">
                     <Badge size="sm" variant="light" color={document.settlement === 'PAID' ? 'brand' : 'orange'}>
-                      {SETTLEMENT_LABELS[document.settlement]}
+                      {settlementLabels[document.settlement]}
                     </Badge>
                     <Text fz="xs" c="dimmed">
                       {formatDate(document.document_date)}

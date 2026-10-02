@@ -12,11 +12,13 @@ import {
   createLedgerEntrySchema,
   ledgerCustomerQuerySchema,
   ledgerEntryQuerySchema,
+  ledgerStatementQuerySchema,
   updateLedgerEntrySchema,
   voidLedgerEntrySchema,
   type LedgerCustomerPage,
   type LedgerCustomerRow,
   type LedgerEntryPage,
+  type LedgerStatement,
   type LedgerSummary,
 } from '@suarza-oman/shared';
 import { CustomerModel, toCustomer } from '../models/customer.model.js';
@@ -213,6 +215,111 @@ ledgerRouter.get(
     };
 
     res.json({ customer: toCustomer(customer), account });
+  }),
+);
+
+/**
+ * A statement of account, for printing.
+ *
+ * Three figures have to agree or the paper is worthless: the opening balance,
+ * the running balance down the page, and the closing balance. They are all
+ * derived from the same signed sum here rather than assembled in the client -
+ * a statement whose last row disagrees with its own total is the kind of thing
+ * a customer notices and an accountant never trusts again.
+ *
+ * The running balance is accumulated over EVERY entry on the account, oldest
+ * first, and only then cut to the period. Starting the sum at the period would
+ * make every balance on the page wrong by whatever came before it.
+ */
+ledgerRouter.get(
+  '/customers/:id/statement',
+  handle(async (req, res) => {
+    const id = requireId(req.params.id);
+    const query = ledgerStatementQuerySchema.parse(req.query);
+
+    const customer = await CustomerModel.findById(id).lean();
+    if (!customer) throw ApiError.notFound('Customer');
+
+    const customerId = new Types.ObjectId(id);
+    /* Voided entries are shown on the screen's history but never on a
+       statement: the point of the document is what is owed, and a row that
+       counts for nothing only invites the question of why it is there. */
+    const signed = {
+      $cond: [{ $eq: ['$direction', 'DEBIT'] }, '$amount_baisa', { $multiply: ['$amount_baisa', -1] }],
+    };
+
+    const inPeriod = {
+      ...(query.from || query.to
+        ? {
+            entry_date: {
+              ...(query.from ? { $gte: query.from } : {}),
+              ...(query.to ? { $lte: query.to } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [result] = await LedgerEntryModel.aggregate([
+      { $match: { customer_id: customerId, voided_at: null } },
+      { $sort: { entry_date: 1, _id: 1 } },
+      {
+        $setWindowFields: {
+          partitionBy: '$customer_id',
+          sortBy: { entry_date: 1, _id: 1 },
+          output: {
+            balance_after_baisa: { $sum: signed, window: { documents: ['unbounded', 'current'] } },
+          },
+        },
+      },
+      {
+        $facet: {
+          /* Everything before the period, summed: what they owed walking in. */
+          opening: query.from
+            ? [
+                { $match: { entry_date: { $lt: query.from } } },
+                { $group: { _id: null, balance: { $sum: signed } } },
+              ]
+            : [{ $limit: 0 }],
+          rows: [{ $match: inPeriod }, { $limit: query.limit }],
+          totals: [
+            { $match: inPeriod },
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                debit: {
+                  $sum: { $cond: [{ $eq: ['$direction', 'DEBIT'] }, '$amount_baisa', 0] },
+                },
+                credit: {
+                  $sum: { $cond: [{ $eq: ['$direction', 'CREDIT'] }, '$amount_baisa', 0] },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const opening = result?.opening?.[0]?.balance ?? 0;
+    const debit = result?.totals?.[0]?.debit ?? 0;
+    const credit = result?.totals?.[0]?.credit ?? 0;
+    const count = result?.totals?.[0]?.count ?? 0;
+
+    const statement: LedgerStatement = {
+      from: query.from ? query.from.toISOString() : null,
+      to: query.to ? query.to.toISOString() : null,
+      opening_balance_baisa: opening,
+      rows: (result?.rows ?? []).map((row: never) =>
+        toLedgerEntry(row, (row as { balance_after_baisa: number }).balance_after_baisa),
+      ),
+      debit_total_baisa: debit,
+      credit_total_baisa: credit,
+      closing_balance_baisa: opening + debit - credit,
+      truncated: count > query.limit,
+      generated_at: new Date().toISOString(),
+    };
+
+    res.json({ customer: toCustomer(customer), statement });
   }),
 );
 

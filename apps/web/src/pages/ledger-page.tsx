@@ -1,8 +1,8 @@
 /**
  * The ledger: every customer account on one screen.
  *
- * Sorted by what is owed, largest first, because the question this page exists
- * to answer is "who owes us money" — not "what is everyone called".
+ * Sorted by balance, largest debit first, because the question this page exists
+ * to answer is "which accounts are in debit" — not "what is everyone called".
  */
 
 import { useEffect, useState } from 'react';
@@ -124,26 +124,26 @@ export function LedgerPage() {
           Ledger
         </Title>
         <Text c="dimmed" fz="sm" mt={4}>
-          What every customer owes, and what they have paid. Open an account to add an entry.
+          Every account, what went in and out, and the balance. Open one to add an entry.
         </Text>
       </div>
 
       <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
         <SummaryTile
-          label="Owed to you"
+          label="Total debit"
           value={formatOMR(summary.data?.receivable_baisa ?? 0)}
-          hint={`Across ${summary.data?.owing_count ?? 0} ${
-            summary.data?.owing_count === 1 ? 'account' : 'accounts'
+          hint={`From ${summary.data?.owing_count ?? 0} ${
+            summary.data?.owing_count === 1 ? 'customer' : 'customers'
           }`}
           icon={<IconArrowUpRight size={21} stroke={1.7} />}
           color="red"
           loading={summary.isLoading}
         />
         <SummaryTile
-          label="Held in credit"
+          label="Total credit"
           value={formatOMR(summary.data?.advance_baisa ?? 0)}
-          hint={`Paid ahead by ${summary.data?.advance_count ?? 0} ${
-            summary.data?.advance_count === 1 ? 'customer' : 'customers'
+          hint={`On ${summary.data?.advance_count ?? 0} ${
+            summary.data?.advance_count === 1 ? 'account' : 'accounts'
           }`}
           icon={<IconArrowDownLeft size={21} stroke={1.7} />}
           color="brand"
@@ -152,7 +152,7 @@ export function LedgerPage() {
         <SummaryTile
           label="Settled"
           value={String(summary.data?.settled_count ?? 0)}
-          hint="Accounts with nothing outstanding"
+          hint="Accounts with nothing left to pay"
           icon={<IconWallet size={21} stroke={1.7} />}
           color="gray"
           loading={summary.isLoading}
@@ -182,9 +182,9 @@ export function LedgerPage() {
               onChange={(value) => setStanding(value as LedgerStanding)}
               data={[
                 { label: 'All', value: 'ALL' },
-                { label: 'Owing', value: 'OWING' },
+                { label: 'Debit', value: 'OWING' },
                 { label: 'Settled', value: 'SETTLED' },
-                { label: 'In credit', value: 'ADVANCE' },
+                { label: 'Credit', value: 'ADVANCE' },
               ]}
               size="md"
             />
@@ -232,7 +232,7 @@ export function LedgerPage() {
               <Text c="dimmed" fz="sm">
                 {debounced || standing !== 'ALL'
                   ? 'No account matches that. Try clearing the filters.'
-                  : 'Add a customer first — every customer gets a ledger account automatically.'}
+                  : 'Add a customer first. Every customer gets an account here on their own.'}
               </Text>
             </Stack>
           </Center>
@@ -242,8 +242,8 @@ export function LedgerPage() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Customer</Table.Th>
-                  <Table.Th ta="right">Charged</Table.Th>
-                  <Table.Th ta="right">Paid</Table.Th>
+                  <Table.Th ta="right">Debit</Table.Th>
+                  <Table.Th ta="right">Credit</Table.Th>
                   <Table.Th ta="right">Balance</Table.Th>
                   <Table.Th>Standing</Table.Th>
                   <Table.Th>Last entry</Table.Th>

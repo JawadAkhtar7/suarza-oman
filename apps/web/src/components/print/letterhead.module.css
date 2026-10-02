@@ -1,0 +1,71 @@
+/*
+ * The band across the top of every printed document.
+ *
+ * Three columns: the Suarza mark, the client's name, and whatever the document
+ * wants to say about itself. Plain CSS and millimetres, because this is laid
+ * out for paper — see printable-document.module.css for the same reasoning.
+ */
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8mm;
+  border-bottom: 1.5pt solid #000;
+  padding-bottom: 3mm;
+}
+
+.mark {
+  width: 28mm;
+  flex: 0 0 28mm;
+}
+
+.markImage {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.identity {
+  flex: 1 1 auto;
+  text-align: center;
+  min-width: 0;
+}
+
+.nameAr {
+  font-size: 15pt;
+  font-weight: 700;
+  line-height: 1.3;
+  direction: rtl;
+}
+
+.nameEn {
+  font-size: 12pt;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.tagline {
+  font-size: 9.5pt;
+  color: #222;
+  margin-top: 0.5mm;
+}
+
+.cr {
+  font-size: 9pt;
+  color: #333;
+}
+
+.aside {
+  flex: 0 0 40mm;
+  text-align: right;
+  font-size: 9pt;
+  color: #222;
+}
+
+/* The two name colours have to survive a browser's "economy" print mode. */
+.nameAr,
+.nameEn {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

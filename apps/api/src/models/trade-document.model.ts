@@ -10,6 +10,7 @@ import {
   DOCUMENT_KINDS,
   DOCUMENT_STATUSES,
   SETTLEMENTS,
+  type DocumentKind,
   type TradeDocument,
 } from '@suarza-oman/shared';
 
@@ -37,10 +38,16 @@ const documentSchema = new Schema(
     party_name: { type: String, required: true, trim: true },
     document_date: { type: Date, required: true },
     reference: { type: String, default: '', trim: true, maxlength: 60 },
+    /** The sales invoice a return is written against. Free text - see schema. */
+    against_invoice_number: { type: String, default: '', trim: true, maxlength: 60 },
     settlement: { type: String, enum: SETTLEMENTS, default: 'ON_ACCOUNT' },
+    salesman_id: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
+    /** Copied at the time, like party_name, and for the same reason. */
+    salesman_name: { type: String, default: '', trim: true, maxlength: 140 },
     lines: { type: [lineSchema], required: true },
     net_baisa: { type: Number, required: true },
     vat_baisa: { type: Number, required: true },
+    discount_baisa: { type: Number, default: 0, min: 0 },
     total_baisa: { type: Number, required: true },
     notes: { type: String, default: '', trim: true, maxlength: 1000 },
     status: { type: String, enum: DOCUMENT_STATUSES, default: 'POSTED', index: true },
@@ -84,15 +91,38 @@ const counterSchema = new Schema<Counter>(
 );
 export const CounterModel: Model<Counter> = model<Counter>('Counter', counterSchema);
 
-const PREFIX: Record<string, string> = { SALE: 'INV', PURCHASE: 'PO' };
+/**
+ * Every kind is numbered 1, 2, 3 - plain numbers, which is what the client's
+ * books already use and what the office reads out on the phone. Each kind
+ * counts on its own run, so a purchase return is "PR 4" and not number 4 of
+ * some shared sequence. Two documents of different kinds can therefore share a
+ * number, which is why nothing in this system identifies one by its number
+ * alone - see the document_id on a ledger entry.
+ */
+function formatNumber(_kind: DocumentKind, seq: number): string {
+  return String(seq);
+}
 
-export async function nextDocumentNumber(kind: 'SALE' | 'PURCHASE'): Promise<string> {
+export async function nextDocumentNumber(kind: DocumentKind): Promise<string> {
   const counter = await CounterModel.findByIdAndUpdate(
     `document:${kind}`,
     { $inc: { seq: 1 } },
     { new: true, upsert: true },
   ).lean();
-  return `${PREFIX[kind]}-${String(counter?.seq ?? 1).padStart(6, '0')}`;
+  return formatNumber(kind, counter?.seq ?? 1);
+}
+
+/**
+ * What the next number will probably be, for showing on an unsaved form.
+ *
+ * Deliberately does not reserve it: a number handed out and then abandoned
+ * leaves a hole in the sequence, and a bill book with a missing number is a
+ * question somebody has to answer later. Two people drafting at once will both
+ * see the same figure and the second will be told a different one on save.
+ */
+export async function peekDocumentNumber(kind: DocumentKind): Promise<string> {
+  const counter = await CounterModel.findById(`document:${kind}`).lean();
+  return formatNumber(kind, (counter?.seq ?? 0) + 1);
 }
 
 export function toTradeDocument(
@@ -106,7 +136,10 @@ export function toTradeDocument(
     party_name: doc.party_name,
     document_date: doc.document_date.toISOString(),
     reference: doc.reference ?? '',
+    against_invoice_number: doc.against_invoice_number ?? '',
     settlement: doc.settlement as TradeDocument['settlement'],
+    salesman_id: doc.salesman_id ? String(doc.salesman_id) : null,
+    salesman_name: doc.salesman_name ?? '',
     lines: (doc.lines ?? []).map((line) => ({
       product_id: line.product_id ? String(line.product_id) : null,
       description: line.description,
@@ -120,6 +153,7 @@ export function toTradeDocument(
     })),
     net_baisa: doc.net_baisa,
     vat_baisa: doc.vat_baisa,
+    discount_baisa: doc.discount_baisa ?? 0,
     total_baisa: doc.total_baisa,
     notes: doc.notes ?? '',
     status: doc.status as TradeDocument['status'],

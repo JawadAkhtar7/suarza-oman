@@ -2,18 +2,18 @@
  * How a balance is shown, everywhere it is shown.
  *
  * A number on its own is ambiguous in a ledger — 4.500 could be theirs or ours.
- * So the amount never appears without the word that says which: "owes you", or
- * "in credit". Colour carries the same meaning a second time, for the glance
- * rather than the read, and never carries it alone.
+ * So the amount never appears without the word that says which side it falls
+ * on: debit or credit. Colour carries the same meaning a second time, for the
+ * glance rather than the read, and never carries it alone.
  */
 
 import { Badge, Group, Text } from '@mantine/core';
 import { formatOMR, standingOf } from '@suarza-oman/shared';
 
 export const STANDING_LABEL = {
-  OWING: 'Owes you',
-  ADVANCE: 'In credit',
-  SETTLED: 'Settled',
+  OWING: 'Debit',
+  ADVANCE: 'Credit',
+  SETTLED: 'Paid',
 } as const;
 
 /** Red for money out there, green for money held, grey for nothing owed. */
@@ -57,7 +57,7 @@ export function BalanceAmount({
       </Text>
       {withWord && standing !== 'SETTLED' && (
         <Text fz="xs" c="dimmed">
-          {standing === 'OWING' ? 'owed' : 'in credit'}
+          {standing === 'OWING' ? 'debit' : 'credit'}
         </Text>
       )}
     </Group>

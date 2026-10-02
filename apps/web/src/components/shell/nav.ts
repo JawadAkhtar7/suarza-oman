@@ -13,6 +13,8 @@
 
 import {
   IconAddressBook,
+  IconArrowBackUp,
+  IconArrowForwardUp,
   IconBox,
   IconBuildingWarehouse,
   IconCash,
@@ -50,7 +52,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Master data',
+    label: 'Your records',
     items: [
       { label: 'Customers', to: '/customers', icon: IconAddressBook, countKey: 'customers' },
       { label: 'Products', to: '/products', icon: IconBox, countKey: 'products' },
@@ -59,10 +61,12 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Operations',
+    label: 'Day to day',
     items: [
       { label: 'Sales', to: '/sales', icon: IconShoppingCart },
+      { label: 'Sales returns', to: '/sales-returns', icon: IconArrowBackUp },
       { label: 'Purchases', to: '/purchases', icon: IconFileInvoice },
+      { label: 'Purchase returns', to: '/purchase-returns', icon: IconArrowForwardUp },
     ],
   },
   {

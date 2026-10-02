@@ -16,6 +16,7 @@ import type {
   LedgerEntry,
   LedgerEntryPage,
   LedgerStanding,
+  LedgerStatement,
   LedgerSummary,
   UpdateLedgerEntryInput,
 } from '@suarza-oman/shared';
@@ -36,6 +37,8 @@ const keys = {
   list: (params: LedgerListParams) => ['ledger', 'list', params] as const,
   account: (id: string) => ['ledger', 'account', id] as const,
   entries: (id: string, page: number) => ['ledger', 'entries', id, page] as const,
+  statement: (id: string, from: string, to: string) =>
+    ['ledger', 'statement', id, from, to] as const,
 };
 
 export function useLedgerSummary() {
@@ -71,6 +74,30 @@ export function useLedgerEntries(customerId: string, page: number) {
     queryFn: () =>
       api.get<LedgerEntryPage>(
         `/api/ledger/customers/${customerId}/entries${queryString({ page, page_size: 50 })}`,
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export interface LedgerStatementResult {
+  customer: Customer;
+  statement: LedgerStatement;
+}
+
+/**
+ * The printable statement for a date range.
+ *
+ * Fetched separately from the paged entry list rather than assembled from it:
+ * the list is newest-first and only a page deep, and a statement that silently
+ * covered "the most recent fifty entries" instead of the dates printed at the
+ * top of it would be worse than no statement at all.
+ */
+export function useLedgerStatement(customerId: string, from: string, to: string) {
+  return useQuery({
+    queryKey: keys.statement(customerId, from, to),
+    queryFn: () =>
+      api.get<LedgerStatementResult>(
+        `/api/ledger/customers/${customerId}/statement${queryString({ from, to })}`,
       ),
     placeholderData: keepPreviousData,
   });

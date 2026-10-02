@@ -166,7 +166,7 @@ export function EmployeeModal({ opened, onClose, employee }: EmployeeModalProps)
             <TextInput
               label="Staff number"
               placeholder="E001"
-              description="Optional, but no two can share one"
+              description="Optional. No two staff can have the same number."
               {...form.getInputProps('code')}
             />
             <TextInput label="Designation" placeholder="Driver" {...form.getInputProps('designation')} />
@@ -192,7 +192,7 @@ export function EmployeeModal({ opened, onClose, employee }: EmployeeModalProps)
             <TextInput label="Nationality" placeholder="Omani" {...form.getInputProps('nationality')} />
           </SimpleGrid>
 
-          <Divider label="Pay and service" labelPosition="left" />
+          <Divider label="Pay and joining" labelPosition="left" />
 
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
             <NumberInput
@@ -228,7 +228,7 @@ export function EmployeeModal({ opened, onClose, employee }: EmployeeModalProps)
 
           <Textarea
             label="Notes"
-            placeholder="Anything worth knowing — licence expiry, shift, next of kin"
+            placeholder="Anything worth noting — licence expiry, shift, who to call"
             autosize
             minRows={2}
             maxRows={5}

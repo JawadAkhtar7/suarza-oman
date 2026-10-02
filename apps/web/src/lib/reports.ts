@@ -3,11 +3,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, queryString } from './api.js';
 
+export interface DocumentTotals {
+  count: number;
+  net_baisa: number;
+  vat_baisa: number;
+  total_baisa: number;
+}
+
 export interface ReportsOverview {
   from: string;
   to: string;
-  sales: { count: number; net_baisa: number; vat_baisa: number; total_baisa: number };
-  purchases: { count: number; net_baisa: number; vat_baisa: number; total_baisa: number };
+  /** Gross, before anything came back. */
+  sales: DocumentTotals;
+  purchases: DocumentTotals;
+  sale_returns: DocumentTotals;
+  purchase_returns: DocumentTotals;
+  /** Gross less returns. The series below is netted the same way. */
+  net_sales_baisa: number;
+  net_purchases_baisa: number;
   margin_baisa: number;
   receivable_baisa: number;
   payable_baisa: number;

@@ -81,11 +81,10 @@ function fieldError(field: 'name' | 'phone' | 'email', value: unknown): string |
   return result.success ? null : (result.error.issues[0]?.message ?? 'Check this field');
 }
 
-/** Debit means they owe you; credit means they are ahead. Said in words,
-    because "Dr/Cr" is only obvious to somebody who does this all day. */
+/** The same two words the ledger uses everywhere else, and in the same order. */
 const SIDE_OPTIONS = [
-  { value: 'DEBIT', label: 'Debit (owes)' },
-  { value: 'CREDIT', label: 'Credit (ahead)' },
+  { value: 'DEBIT', label: 'Debit' },
+  { value: 'CREDIT', label: 'Credit' },
 ];
 
 export function CustomerModal({
@@ -295,13 +294,13 @@ export function CustomerModal({
 
           <Text fz="xs" c="dimmed" mt={-8}>
             {editing
-              ? 'The opening balance was posted to this customer’s ledger when they were added. Change it there, not here.'
-              : 'The opening balance starts their ledger. Last year’s figure is kept for reference and does not affect what they owe.'}
+              ? 'The opening balance was added to this customer’s account when you created them. Change it there, not here.'
+              : 'The opening balance starts their account. Last year’s figure is only for reference and does not change the balance.'}
           </Text>
 
           <Checkbox
             label="List this customer in the Vendor list"
-            description="They stay one record with one ledger — this only adds them to Vendors as well."
+            description="They stay one record with one account. This just adds them to Vendors too."
             {...form.getInputProps('is_vendor', { type: 'checkbox' })}
           />
 

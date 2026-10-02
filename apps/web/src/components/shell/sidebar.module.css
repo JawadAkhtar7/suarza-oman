@@ -14,10 +14,28 @@
 }
 
 .brand {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 14px 12px 12px;
+}
+
+/*
+ * Over the logo plate rather than beside it: the drawer is 250px wide and a
+ * row that has to fit a wordmark AND a button ends up with a cramped logo. The
+ * plate is white, so a dark glyph on it reads without any backing of its own.
+ */
+.close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  color: #0b1524;
+}
+
+.close:hover {
+  background: rgba(11, 21, 36, 0.08);
 }
 
 /*

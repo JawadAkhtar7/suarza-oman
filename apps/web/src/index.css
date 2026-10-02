@@ -13,3 +13,51 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * Printing.
+ *
+ * One rule decides what reaches the paper: anything that is screen furniture —
+ * the menu, the header, the buttons, the toasts — is hidden, and the printable
+ * sheet rendered next to the page takes over. Nothing is cloned into a second
+ * window, so what prints is built from the same document the screen is showing.
+ */
+@media print {
+  /* AppShell renders these as real elements, so no class name is relied on. */
+  nav,
+  header,
+  [data-print='hide'] {
+    display: none !important;
+  }
+
+  /* Toasts and the command palette live in portals outside the layout. */
+  .mantine-Notifications-root,
+  .mantine-Spotlight-root {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  /* The app is a full-height scrolling shell on screen. On paper that would
+     clip everything after the first page, so the height and the scrolling
+     containers are undone. */
+  html,
+  body,
+  #root,
+  main {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}
