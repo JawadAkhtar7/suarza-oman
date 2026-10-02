@@ -98,15 +98,20 @@ export function AppLayout() {
       </AppShell.Navbar>
 
       {mobileOpen && isDrawer && (
-        /* Below the navbar and the header, so the drawer stays lit and the
-           burger stays tappable, and above everything else. */
         <Overlay
-          /* Fixed, not absolute: AppShell's root is not a positioned ancestor,
-             so an absolute overlay would scroll away with the page. */
+          /*
+           * 99, because AppShell sits at Mantine's `app` elevation of 100.
+           * Anything higher covers the drawer itself: taps on a menu item land
+           * on the overlay, the drawer closes, and the link is never followed —
+           * which looks exactly like the menu being broken.
+           *
+           * Fixed rather than absolute: AppShell's root is not a positioned
+           * ancestor, so an absolute overlay would scroll away with the page.
+           */
           fixed
           color="#000"
           backgroundOpacity={0.45}
-          zIndex={199}
+          zIndex={99}
           onClick={closeMobile}
           {...swipe}
         />
