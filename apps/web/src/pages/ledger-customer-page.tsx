@@ -137,6 +137,9 @@ export function LedgerCustomerPage() {
   const printStatement = async () => {
     try {
       const fresh = await statement.refetch();
+      /* The query's own error first: "could not be made" tells nobody anything,
+         and this is the message that says which part failed. */
+      if (fresh.error) throw fresh.error;
       if (!fresh.data) throw new Error('The statement could not be made');
       window.print();
     } catch (error) {

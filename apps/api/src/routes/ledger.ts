@@ -273,13 +273,19 @@ ledgerRouter.get(
       },
       {
         $facet: {
-          /* Everything before the period, summed: what they owed walking in. */
-          opening: query.from
-            ? [
-                { $match: { entry_date: { $lt: query.from } } },
-                { $group: { _id: null, balance: { $sum: signed } } },
-              ]
-            : [{ $limit: 0 }],
+          /*
+           * Everything before the period, summed: the balance walking in.
+           *
+           * With no start date there is nothing before the period, so the facet
+           * has to match no documents at all. `$in: []` does that; `$limit: 0`
+           * does NOT — Mongo rejects it outright ("the limit must be positive")
+           * and fails the whole aggregation, which is how an open-ended
+           * statement used to die before it was drawn.
+           */
+          opening: [
+            { $match: query.from ? { entry_date: { $lt: query.from } } : { _id: { $in: [] } } },
+            { $group: { _id: null, balance: { $sum: signed } } },
+          ],
           rows: [{ $match: inPeriod }, { $limit: query.limit }],
           totals: [
             { $match: inPeriod },

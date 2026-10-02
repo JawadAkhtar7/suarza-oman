@@ -350,7 +350,12 @@ describe('the printed statement', () => {
     await addEntry(id, payment(5_000, { entry_date: '2026-03-05', reference: 'B' }));
     await addEntry(id, charge(2_000, { entry_date: '2026-03-09', reference: 'C' }));
 
-    const { body } = await statementOf(id);
+    /* Asserted first and on its own: an open-ended statement is the default the
+       print button uses, and the aggregation behind it has failed outright
+       before now. A 500 here must read as a 500, not as a pile of undefineds. */
+    const response = await statementOf(id);
+    expect(response.status).toBe(200);
+    const { body } = response;
 
     expect(body.statement.opening_balance_baisa).toBe(0);
     expect(body.statement.rows.map((row: { reference: string }) => row.reference)).toEqual([
